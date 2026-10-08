@@ -1,4 +1,5 @@
-"""Template filters for en-GB display: ``gbp``, ``number``, ``percent``, ``uk_date``."""
+"""Template filters for en-GB display: ``gbp``, ``number``, ``plain_number``, ``percent``,
+``uk_date``."""
 
 from __future__ import annotations
 
@@ -21,6 +22,12 @@ def gbp(value: Any) -> str:
 def number(value: Any) -> str:
     """``188676`` -> ``188,676``."""
     return formatting.number(value)
+
+
+@register.filter
+def plain_number(value: Any) -> str:
+    """``55.250000`` -> ``55.25`` (an exchange rate as the user entered it)."""
+    return formatting.plain_number(value)
 
 
 @register.filter

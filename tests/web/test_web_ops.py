@@ -44,7 +44,10 @@ def test_readyz_is_503_when_the_rate_sets_fail(
     data = response.json()
     assert response.status_code == 503
     assert data["status"] == "unavailable"
-    assert "rate set failed validation" in data["checks"]["rate_sets"]["detail"]
+    # A stable code only: the exception text goes to the log, never into the response.
+    assert data["checks"]["rate_sets"] == {"ok": False, "code": "rate_sets_unavailable"}
+    assert "rate set failed validation" not in response.content.decode()
+    assert "ValueError" not in response.content.decode()
 
 
 def test_readyz_reports_a_missing_database_as_degraded(
@@ -59,6 +62,8 @@ def test_readyz_reports_a_missing_database_as_degraded(
     response = client.get("/readyz")
     assert response.status_code == 200
     assert response.json()["status"] == "degraded"
+    assert response.json()["checks"]["database"] == {"ok": False, "code": "database_unavailable"}
+    assert "database unavailable" not in response.content.decode()
 
 
 def test_selftest_passes_with_the_reference_figures(client: Client) -> None:

@@ -4,7 +4,8 @@
 * ``/readyz``: the rate sets and the immigration guidance pack load and validate, and
   the database is reachable with no unapplied migrations. Rates or guidance failing is
   503; the database failing is reported as degraded (200), because estimates need no
-  database.
+  database. A failed check reports a stable code such as ``rate_sets_unavailable``; the
+  detail goes to the log only.
 * ``/selftest/golden``: runs the reference example through the same service as every
   page and checks the reference pack's figures to the pound; 500 on any mismatch. When
   ``SELFTEST_TOKEN`` is set it must be given as ``?token=`` or ``X-Selftest-Token``.
@@ -84,11 +85,13 @@ def _check_database() -> dict[str, Any]:
 
 
 def _run_check(name: str, check: Any) -> dict[str, Any]:
+    """Run one readiness check. A failure is logged with its detail; the response carries
+    only a stable code (``<check>_unavailable``), never the exception text."""
     try:
         result: dict[str, Any] = check()
-    except Exception as exc:  # readiness must report, not raise
+    except Exception:  # readiness must report, not raise
         logger.exception("readiness check %s failed", name)
-        return {"ok": False, "detail": f"{type(exc).__name__}: {exc}"}
+        return {"ok": False, "code": f"{name}_unavailable"}
     return result
 
 

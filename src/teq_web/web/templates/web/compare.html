@@ -5,8 +5,10 @@
 <h1>UK National Insurance or the Turkish scheme</h1>
 <p class="lead">The same scenario calculated both ways. Under the social security agreement the employee may stay in the Turkish scheme with a certificate of coverage: UK National Insurance and Class 1A go, and the Turkish employer contributions that continue are shown as their own line.</p>
 
+{% for notice in notices %}<p class="flag flag--info notice"><span class="badge badge--info">info</span> {{ notice }}</p>{% endfor %}
 {% for column in columns %}
   {% if column.problem %}<p class="flag flag--warning"><strong>{{ column.title }}:</strong> {{ column.problem }}</p>{% endif %}
+  {% if column.link_note %}<p class="flag flag--info"><strong>{{ column.title }}:</strong> {{ column.link_note }}</p>{% endif %}
 {% endfor %}
 
 {% if rows %}

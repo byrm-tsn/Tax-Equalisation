@@ -272,3 +272,90 @@ def test_exchange_rate_dated_after_the_rates_date(
     html = client.post("/", form_data).content.decode()
     assert "There is a problem" in html
     assert 'href="#id_fx_date"' in html
+
+
+@pytest.mark.parametrize("rates_as_of", ["0001-01-01", "9999-12-31", "1999-12-31", "2101-01-01"])
+def test_rates_date_out_of_range_is_a_form_error(
+    client: Client, form_data: dict[str, str], rates_as_of: str
+) -> None:
+    form_data["rates_as_of"] = rates_as_of
+    response = _submit(client, form_data)
+    html = response.content.decode()
+    assert response.status_code == 200
+    message = "The rates date must be between 1 January 2000 and 31 December 2100."
+    assert html.count(message) == 2  # summary and inline
+    assert 'href="#id_rates_as_of"' in html
+
+
+@pytest.mark.parametrize("rates_as_of", ["2000-01-01", "2100-12-31"])
+def test_rates_date_bounds_are_inclusive(form_data: dict[str, str], rates_as_of: str) -> None:
+    form_data["rates_as_of"] = rates_as_of
+    form = ScenarioForm(form_data)
+    assert form.is_valid(), form.errors
+
+
+def test_an_amount_over_the_cap_is_reported_once(client: Client, form_data: dict[str, str]) -> None:
+    form_data["salary_amount"] = "999999999999"
+    html = _submit(client, form_data).content.decode()
+    assert html.count("The base salary must be no more than 1,000,000,000.") == 2  # summary, inline
+
+
+def test_a_housing_contribution_needs_a_housing_amount(
+    client: Client, form_data: dict[str, str]
+) -> None:
+    form_data |= {"housing_amount": "", "housing_contribution": "400"}
+    response = _submit(client, form_data)
+    html = response.content.decode()
+    assert response.status_code == 200
+    assert "Enter the housing amount, or leave the employee contribution blank." in html
+    assert 'href="#id_housing_contribution"' in html
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "Bonus \x1b[31mred",  # ESC
+        "Bell\x07",
+        "Tab\there",
+        "abc‮dcba",  # right-to-left override
+        "x‪y",
+        "x⁦y⁩",  # isolates
+    ],
+)
+def test_item_labels_refuse_control_and_direction_characters(
+    client: Client, form_data: dict[str, str], label: str
+) -> None:
+    form_data |= {"items-0-kind": "BONUS", "items-0-amount": "1000", "items-0-label": label}
+    response = _submit(client, form_data)
+    html = response.content.decode()
+    assert response.status_code == 200
+    assert (
+        "Item 1: The description cannot contain control characters or text-direction marks; "
+        "type it as plain text."
+    ) in html
+    assert 'href="#id_items-0-label"' in html
+
+
+def test_ordinary_labels_are_accepted(form_data: dict[str, str]) -> None:
+    form_data |= {
+        "items-0-kind": "BONUS",
+        "items-0-amount": "1000",
+        "items-0-label": "Prime d'été – 2027 (İstanbul)",
+    }
+    _, _, outcome = _build(form_data)
+    assert outcome is not None
+
+
+def test_the_exchange_rate_source_refuses_control_characters(
+    client: Client, form_data: dict[str, str]
+) -> None:
+    form_data |= {"fx_rate": "55.25", "fx_date": "2026-10-01", "fx_source": "Bank‮"}
+    html = _submit(client, form_data).content.decode()
+    assert "The source of the exchange rate cannot contain control characters" in html
+
+
+def test_the_exchange_rate_prefills_as_entered(client: Client, form_data: dict[str, str]) -> None:
+    form_data |= {"fx_rate": "55.25", "fx_date": "2026-10-01"}
+    location = _submit(client, form_data)["Location"]
+    html = client.get("/", {"s": location.split("s=", 1)[1]}).content.decode()
+    assert 'name="fx_rate" value="55.25"' in html

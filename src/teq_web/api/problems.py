@@ -15,6 +15,7 @@ from django.http import HttpRequest, HttpResponse
 from teq_engine import ENGINE_VERSION
 
 __all__ = [
+    "PROBLEM_CONTENT_TYPE",
     "PROBLEM_TITLES",
     "json_pointer",
     "json_response",
@@ -27,6 +28,8 @@ PROBLEM_CONTENT_TYPE: Final = "application/problem+json"
 PROBLEM_TITLES: Final[dict[str, str]] = {
     "validation-failed": "The request is not a valid scenario",
     "malformed-json": "The request body is not valid JSON",
+    "empty-body": "The request body is empty",
+    "request-too-large": "The request body is too large",
     "route-not-supported": "The route is not supported",
     "rates-unavailable": "No rates cover this date",
     "invalid-scenario-link": "The scenario link could not be read",

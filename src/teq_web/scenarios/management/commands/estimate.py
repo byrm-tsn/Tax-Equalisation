@@ -5,7 +5,8 @@
     python src/manage.py estimate --input scenario.json # a scenario file
 
 A scenario file holds the inputs exactly as ``POST /api/v1/estimates`` takes them; its
-``rates_as_of`` (if any) is used and ``options`` is ignored.
+``rates_as_of`` (if any) is used and ``options`` is ignored. Every refusal is a one-line
+``CommandError`` (a scenario that fails validation lists each problem on its own line).
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from teq_engine import (
     REFERENCE_RATES_AS_OF,
@@ -27,20 +28,26 @@ from teq_engine import (
     UnsupportedRouteError,
     reference_example,
 )
+from teq_engine.types import IsoDate
 from teq_web.formatting import gbp
 from teq_web.scenarios.capability import supported_route_dicts
-from teq_web.scenarios.services import estimate, today
+from teq_web.scenarios.services import estimate, rates_date_problem, today
 
 _RATIOS = (LineCode.MULTIPLE_OF_SALARY, LineCode.MARGINAL_COST_PER_NET_POUND)
 
+_ISO_DATE: TypeAdapter[date] = TypeAdapter(IsoDate)
 
-def _parse_date(text: str) -> date:
+
+def _parse_date(value: object, *, source: str) -> date:
+    """A rates date, by the same rules as the API; ``source`` names it in the error."""
     try:
-        return date.fromisoformat(text)
-    except ValueError as exc:
-        raise CommandError(
-            f"--rates-as-of must be a date such as 2026-10-08, not {text!r}"
-        ) from exc
+        parsed = _ISO_DATE.validate_python(value)
+    except ValidationError as exc:
+        raise CommandError(f"{source} must be a date such as 2026-10-08, not {value!r}") from exc
+    problem = rates_date_problem(parsed)
+    if problem is not None:
+        raise CommandError(f"{source}: {problem}")
+    return parsed
 
 
 class Command(BaseCommand):
@@ -68,8 +75,11 @@ class Command(BaseCommand):
         try:
             result = estimate(inputs, rates_as_of=rates_as_of)
         except UnsupportedRouteError as exc:
+            # The engine's message may list the supported routes by code; list them once,
+            # by name.
+            refused = exc.message.split(" Supported:", 1)[0].rstrip()
             supported = "; ".join(str(route["description"]) for route in supported_route_dicts())
-            raise CommandError(f"{exc.message} Supported: {supported}.") from exc
+            raise CommandError(f"{refused} Supported: {supported}.") from exc
         except EngineError as exc:  # rates unavailable, invalid as given, solver failure
             raise CommandError(exc.message) from exc
         if options["json"]:
@@ -80,7 +90,11 @@ class Command(BaseCommand):
         self.stdout.write(render_table(result))
 
     def _load(self, options: dict[str, Any]) -> tuple[ScenarioInput, date]:
-        override = _parse_date(options["rates_as_of"]) if options.get("rates_as_of") else None
+        override = (
+            _parse_date(options["rates_as_of"], source="--rates-as-of")
+            if options.get("rates_as_of")
+            else None
+        )
         if options["example"]:
             return reference_example(), override or REFERENCE_RATES_AS_OF
         path = Path(options["input"])
@@ -88,6 +102,11 @@ class Command(BaseCommand):
             data = json.loads(path.read_text(encoding="utf-8"))
         except OSError as exc:
             raise CommandError(f"Cannot read {path}: {exc.strerror}") from exc
+        except UnicodeDecodeError as exc:
+            raise CommandError(
+                f"{path} is not UTF-8 text (byte {exc.start} cannot be read): save the "
+                "scenario as UTF-8 JSON."
+            ) from exc
         except json.JSONDecodeError as exc:
             raise CommandError(f"{path} is not valid JSON: {exc}") from exc
         if not isinstance(data, dict):
@@ -102,7 +121,12 @@ class Command(BaseCommand):
                 for error in exc.errors()
             )
             raise CommandError(f"{path} is not a valid scenario:\n{problems}") from exc
-        rates_as_of = override or (_parse_date(str(file_date)) if file_date else today())
+        if override is not None:
+            rates_as_of = override
+        elif file_date is not None:
+            rates_as_of = _parse_date(file_date, source=f"{path}: rates_as_of")
+        else:
+            rates_as_of = today()
         return inputs, rates_as_of
 
 

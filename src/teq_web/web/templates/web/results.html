@@ -4,6 +4,7 @@
 {% block content %}
 <h1>Employer cost of the assignment</h1>
 <p class="lead">{{ result.route.home }} to {{ result.route.host }} ({{ result.route.region }}), {{ year_count }} year{{ year_count|pluralize }}, rates as at {{ result.rates_as_of|uk_date }}. All amounts in pounds.</p>
+{% for notice in notices %}<p class="flag flag--info notice"><span class="badge badge--info">info</span> {{ notice }}</p>{% endfor %}
 
 <nav class="contents callout no-print" aria-label="On this page">
   <ol>
@@ -40,9 +41,9 @@
     {% for flag in flags %}
       <li class="flag flag--{{ flag.severity }}">
         <span class="badge badge--{{ flag.severity }}">{{ flag.severity }}</span>
-        <strong>{{ flag.title }}</strong>{% if flag.year %} (year {{ flag.year }}){% endif %}
-        <p>{{ flag.text }}</p>
-        <p class="muted">Question: {{ flag.question }} <span class="code">{{ flag.code }}</span></p>
+        <strong>{{ flag.title }}</strong>{% if flag.years %} ({{ flag.years }}){% endif %}
+        {% for text in flag.texts %}<p>{{ text }}</p>{% endfor %}
+        <p class="muted">Question: {{ flag.questions|join:" " }} <span class="code">{{ flag.code }}</span></p>
       </li>
     {% endfor %}
   </ul>
@@ -51,7 +52,7 @@
 <section id="net-guarantee" aria-labelledby="ng-title">
   <h2 id="ng-title">1. Net guarantee</h2>
   <p>What the employee is promised in their pocket each year. The hypothetical Turkish tax was
-    {% if hypothetical_tax.mode == "OVERRIDE" %}supplied as an assumption{% if hypothetical_tax.calculated_for_comparison %} (calculated under the Turkish rules it would be {{ hypothetical_tax.calculated_for_comparison|gbp }}){% endif %}{% else %}calculated under the Turkish rules{% if hypothetical_tax.fx %} at {{ hypothetical_tax.fx.rate|number }} lira to the pound, dated {{ hypothetical_tax.fx.as_of|uk_date }}{% endif %}{% endif %}.</p>
+    {% if hypothetical_tax.mode == "OVERRIDE" %}supplied as an assumption{% if hypothetical_tax.calculated_for_comparison %} (calculated under the Turkish rules it would be {{ hypothetical_tax.calculated_for_comparison|gbp }}){% endif %}{% else %}calculated under the Turkish rules{% if hypothetical_tax.fx %} at {{ hypothetical_tax.fx.rate|plain_number }} lira to the pound, dated {{ hypothetical_tax.fx.as_of|uk_date }}{% endif %}{% endif %}.</p>
   <div class="table-wrap">
     <table>
       <thead><tr><th scope="col">Line</th>{% for header in year_headers %}<th scope="col" class="num">{{ header }}</th>{% endfor %}</tr></thead>
@@ -92,7 +93,7 @@
             <th scope="row">{{ row.name }}</th>
             <td>{{ row.amount }}</td>
             <td>{{ row.years }}</td>
-            <td><strong>{{ row.label }}</strong><br><span class="code">{{ row.treatment }}</span></td>
+            <td><strong>{{ row.label }}</strong>{% if row.part %} {{ row.part }}{% endif %}<br><span class="code">{{ row.treatment }}</span></td>
             <td>{{ row.nic }}</td>
             <td>{{ row.how }}</td>
           </tr>

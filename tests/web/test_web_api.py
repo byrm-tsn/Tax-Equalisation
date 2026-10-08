@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import re
+import zlib
+from datetime import date
 from typing import Any
 
 import pytest
 from django.test import Client
 
-from teq_engine import ENGINE_VERSION
+from teq_engine import ENGINE_VERSION, REFERENCE_RATES_AS_OF, reference_example
 from teq_engine.reference import reference_example_data
+from teq_web.scenarios.services import encode_scenario
 
 PROBLEM = "application/problem+json"
 
@@ -92,6 +96,17 @@ def test_trace_can_be_left_out(client: Client, body: dict[str, Any]) -> None:
     assert data["totals"]["total_employer_cost"] == "369352"
 
 
+def test_openapi_documents_the_optional_trace_and_the_problem_fields(client: Client) -> None:
+    schemas = client.get("/api/v1/openapi.json").json()["components"]["schemas"]
+    response = schemas["EstimateResponse"]
+    assert "trace" in response["properties"]
+    assert "trace" not in response["required"]
+    assert "notes" in response["properties"]
+    problem = schemas["Problem"]["properties"]
+    assert {"engine_code", "reason", "errors", "supported_routes"} <= set(problem)
+    assert "location" in schemas["ProblemError"]["properties"]
+
+
 def test_tailoring_answers_reach_the_panel(client: Client, body: dict[str, Any]) -> None:
     body["options"] = {"include_immigration": True, "tailoring": {"sponsor_licence_held": False}}
     data = _post(client, body).json()
@@ -145,6 +160,37 @@ def test_malformed_json_is_a_400(client: Client) -> None:
     _assert_problem(_post(client, '{"route": '), 400, "malformed-json")
 
 
+@pytest.mark.parametrize("payload", ["", "  \n"])
+def test_an_empty_body_is_a_400(client: Client, payload: str) -> None:
+    data = _assert_problem(_post(client, payload), 400, "empty-body")
+    assert data["detail"].startswith("The request body is empty")
+
+
+def test_a_body_over_the_limit_is_a_413(client: Client, body: dict[str, Any]) -> None:
+    body["padding"] = "x" * 300_000
+    data = _assert_problem(_post(client, body), 413, "request-too-large")
+    assert "256 KB" in data["detail"]
+
+
+def test_the_api_maps_request_data_too_big_without_the_middleware(
+    client: Client, body: dict[str, Any], settings: Any
+) -> None:
+    # Without the size middleware Django itself raises RequestDataTooBig as the body is read.
+    settings.MIDDLEWARE = [
+        name for name in settings.MIDDLEWARE if not name.endswith("RequestSizeLimitMiddleware")
+    ]
+    body["padding"] = "x" * 300_000
+    _assert_problem(_post(client, body), 413, "request-too-large")
+
+
+@pytest.mark.parametrize("method", ["put", "patch", "delete"])
+def test_a_wrong_method_is_a_405_problem(client: Client, method: str) -> None:
+    response = getattr(client, method)("/api/v1/estimates", "{}", content_type="application/json")
+    data = _assert_problem(response, 405, "method-not-allowed")
+    assert {m.strip() for m in response["Allow"].split(",")} == {"GET", "POST"}
+    assert data["detail"].startswith(f"{method.upper()} is not allowed here. Allowed: ")
+
+
 def test_a_json_array_is_not_a_scenario(client: Client) -> None:
     _assert_problem(_post(client, "[]"), 422, "validation-failed")
 
@@ -165,6 +211,30 @@ def test_unsupported_route_is_a_422_listing_the_supported_routes(
     assert data["supported_routes"] == [{"home": "TR", "host": "GB", "regions": ["ENG"]}]
     assert data["errors"][0]["pointer"] == pointer
     assert data["what_adding_it_requires"]
+
+
+@pytest.mark.parametrize("rates_as_of", ["0001-01-01", "9999-12-31", "1999-12-31", "2101-01-01"])
+def test_rates_date_out_of_range_is_a_422_at_the_field(
+    client: Client, body: dict[str, Any], rates_as_of: str
+) -> None:
+    body["rates_as_of"] = rates_as_of
+    data = _assert_problem(_post(client, body), 422, "validation-failed")
+    assert data["errors"] == [
+        {
+            "pointer": "/rates_as_of",
+            "message": "The rates date must be between 1 January 2000 and 31 December 2100.",
+        }
+    ]
+
+
+@pytest.mark.parametrize("rates_as_of", [date(1, 1, 1), date(9999, 12, 31)])
+def test_a_link_with_an_extreme_rates_date_is_a_400(client: Client, rates_as_of: date) -> None:
+    token = encode_scenario(reference_example(), rates_as_of)
+    data = _assert_problem(
+        client.get("/api/v1/estimates", {"s": token}), 400, "invalid-scenario-link"
+    )
+    assert data["reason"] == "date_out_of_range"
+    assert "between 1 January 2000 and 31 December 2100" in data["detail"]
 
 
 def test_rates_before_any_rate_set_is_a_422(client: Client, body: dict[str, Any]) -> None:
@@ -192,11 +262,66 @@ def test_get_estimate_for_a_link_matches_the_post(
     assert "immigration" not in from_link
 
 
+def test_invalid_tailoring_in_the_query_points_at_the_parameter(
+    client: Client, reference_token: str
+) -> None:
+    response = client.get(
+        "/api/v1/estimates",
+        {"s": reference_token, "include_immigration": "true", "visa_length_years": "99"},
+    )
+    data = _assert_problem(response, 422, "invalid-tailoring")
+    assert data["errors"] == [
+        {
+            "pointer": "/tailoring/visa_length_years",
+            "message": "99 is not a valid answer (expected a whole number from 1 to 10)",
+            "location": "query",
+        }
+    ]
+
+
+def _crafted_link(payload: dict[str, Any]) -> str:
+    raw = zlib.compress(json.dumps(payload).encode("utf-8"), 9)
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def test_a_link_from_another_engine_version_gets_an_info_note(client: Client) -> None:
+    token = _crafted_link(
+        {
+            "v": 1,
+            "rates_as_of": REFERENCE_RATES_AS_OF.isoformat(),
+            "engine_version": "0.0.1",
+            "inputs": reference_example_data(),
+        }
+    )
+    response = client.get("/api/v1/estimates", {"s": token})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["engine_version"] == ENGINE_VERSION
+    assert data["totals"]["total_employer_cost"] == "369352"
+    assert data["notes"] == [
+        {
+            "severity": "info",
+            "code": "LINK_ENGINE_VERSION_CHANGED",
+            "text": (
+                f"Recalculated under engine {ENGINE_VERSION}; the link was created under "
+                "engine 0.0.1."
+            ),
+        }
+    ]
+
+
+def test_a_link_from_this_engine_version_has_no_notes(client: Client, reference_token: str) -> None:
+    data = client.get("/api/v1/estimates", {"s": reference_token}).json()
+    assert "notes" not in data
+
+
 def test_get_estimate_with_a_damaged_link(client: Client) -> None:
     data = _assert_problem(
         client.get("/api/v1/estimates", {"s": "nope"}), 400, "invalid-scenario-link"
     )
     assert data["reason"]
+    assert data["errors"][0]["pointer"] == "/s"
+    assert data["errors"][0]["location"] == "query"
 
 
 def test_routes(client: Client) -> None:

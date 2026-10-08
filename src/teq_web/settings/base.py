@@ -46,10 +46,15 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # Outermost, so every response gets the headers, including Django's own error pages.
+    "teq_web.middleware.ResponseHeadersMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # Before CSRF and the views, so an oversized body is refused before anything reads it.
+    "teq_web.middleware.RequestSizeLimitMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "teq_web.middleware.ApiMethodNotAllowedMiddleware",
 ]
 
 ROOT_URLCONF = "teq_web.urls"
@@ -105,6 +110,14 @@ TEQ_CONTENT_SECURITY_POLICY = (
     "default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; "
     "form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'"
 )
+
+# Every response that sets no Cache-Control of its own: results carry salaries in the
+# page and in the URL, so neither a shared cache nor the browser may keep them.
+TEQ_CACHE_CONTROL = "private, no-store"
+TEQ_PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=()"
+
+# A scenario is a few kilobytes; refuse request bodies over 256 KB (413).
+DATA_UPLOAD_MAX_MEMORY_SIZE = 262144
 
 # ---- operations
 # When set, /selftest/golden requires it as ?token= or the X-Selftest-Token header.

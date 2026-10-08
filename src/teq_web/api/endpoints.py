@@ -2,8 +2,9 @@
 
 Every endpoint goes through :mod:`teq_web.scenarios.services`, the same service as the
 web pages and the command line. Errors are RFC 9457 problem details: 422 for invalid
-scenarios and unsupported routes, 400 for malformed JSON, and a 500 that never carries a
-traceback.
+scenarios and unsupported routes, 400 for malformed JSON or an empty body, 405 for a
+method an endpoint does not take, 413 for a body over the size limit, and a 500 that
+never carries a traceback.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import logging
 from datetime import date
 from typing import Any
 
+from django.core.exceptions import RequestDataTooBig
 from django.http import Http404, HttpRequest, HttpResponse
 from ninja import NinjaAPI, Query
 from ninja.errors import HttpError
@@ -47,8 +49,8 @@ from teq_web.scenarios.capability import describe_refusal, supported_route_dicts
 from teq_web.scenarios.services import (
     ScenarioLinkError,
     build_immigration,
-    decode_scenario,
     estimate,
+    read_scenario_link,
     today,
 )
 
@@ -70,14 +72,29 @@ api = NinjaAPI(
     openapi_url="/openapi.json",
 )
 
-_PROBLEMS: dict[int | str, Any] = {400: Problem, 422: Problem, 500: Problem}
+_PROBLEMS: dict[int | str, Any] = {400: Problem, 405: Problem, 422: Problem, 500: Problem}
 
 
 # --------------------------------------------------------------------------- errors
 
 
+def _empty_body(request: HttpRequest) -> HttpResponse | None:
+    """400 for a POST with no body (or only whitespace), rather than a list of missing fields."""
+    if request.method == "POST" and not request.body.strip():
+        return problem(
+            request,
+            status=400,
+            code="empty-body",
+            detail="The request body is empty: send the scenario as a JSON object.",
+        )
+    return None
+
+
 @api.exception_handler(NinjaValidationError)
 def _validation_failed(request: HttpRequest, exc: NinjaValidationError) -> HttpResponse:
+    empty = _empty_body(request)
+    if empty is not None:
+        return empty
     errors = []
     for error in exc.errors:
         loc = tuple(error.get("loc", ()))
@@ -100,6 +117,9 @@ def _validation_failed(request: HttpRequest, exc: NinjaValidationError) -> HttpR
 @api.exception_handler(HttpError)
 def _http_error(request: HttpRequest, exc: HttpError) -> HttpResponse:
     if exc.status_code == 400 and str(exc).startswith("Cannot parse request body"):
+        empty = _empty_body(request)
+        if empty is not None:
+            return empty
         return problem(
             request,
             status=400,
@@ -107,6 +127,13 @@ def _http_error(request: HttpRequest, exc: HttpError) -> HttpResponse:
             detail="The request body could not be parsed as JSON.",
         )
     return problem(request, status=exc.status_code, code="bad-request", detail=str(exc))
+
+
+@api.exception_handler(RequestDataTooBig)
+def _too_large(request: HttpRequest, exc: RequestDataTooBig) -> HttpResponse:
+    from teq_web.web.views import request_too_large
+
+    return request_too_large(request)
 
 
 @api.exception_handler(Http404)
@@ -134,8 +161,15 @@ def _run(
     rates_as_of: date,
     options: EstimateOptions,
     tailoring: dict[str, Any] | None,
+    *,
+    tailoring_in_query: bool = False,
+    notes: list[dict[str, str]] | None = None,
 ) -> HttpResponse:
-    """Calculate and build the response body, or the problem for a refusal."""
+    """Calculate and build the response body, or the problem for a refusal.
+
+    ``tailoring_in_query`` points tailoring errors at the query parameters
+    (``/tailoring/<field>``) rather than into the request body.
+    """
     try:
         result = estimate(inputs, rates_as_of=rates_as_of)
     except UnsupportedRouteError as exc:
@@ -194,8 +228,12 @@ def _run(
                 status=422,
                 code="invalid-tailoring",
                 detail="One or more tailoring answers are not valid; see errors.",
-                errors=[_tailoring_error(text) for text in exc.problems],
+                errors=[
+                    _tailoring_error(text, in_query=tailoring_in_query) for text in exc.problems
+                ],
             )
+    if notes:
+        body["notes"] = notes
     return json_response(body)
 
 
@@ -206,11 +244,21 @@ def _result_body(result: CalculationResult, options: EstimateOptions) -> dict[st
     return body
 
 
-def _tailoring_error(text: str) -> dict[str, str]:
+def _tailoring_error(text: str, *, in_query: bool = False) -> dict[str, str]:
+    """A tailoring problem (``field: message``) as an error entry.
+
+    In a POST body the answers are under ``/options/tailoring``; on the GET endpoint they
+    are query parameters, located as ``/tailoring/<field>`` in the query.
+    """
+    base = "/tailoring" if in_query else "/options/tailoring"
     field, _, message = text.partition(":")
     if message and field.isidentifier():
-        return {"pointer": f"/options/tailoring/{field}", "message": message.strip()}
-    return {"pointer": "/options/tailoring", "message": text}
+        entry = {"pointer": f"{base}/{field}", "message": message.strip()}
+    else:
+        entry = {"pointer": base, "message": text}
+    if in_query:
+        entry["location"] = "query"
+    return entry
 
 
 # --------------------------------------------------------------------------- endpoints
@@ -218,7 +266,7 @@ def _tailoring_error(text: str) -> dict[str, str]:
 
 @api.post(
     "/estimates",
-    response={200: EstimateResponse, **_PROBLEMS},
+    response={200: EstimateResponse, **_PROBLEMS, 413: Problem},
     summary="Calculate an estimate",
     tags=["estimates"],
     url_name="estimates",
@@ -264,16 +312,18 @@ class LinkQuery(BaseModel):
 )
 def estimate_from_link(request: HttpRequest, query: Query[LinkQuery]) -> HttpResponse:
     """The API representation of a results page: `s` is the encoded scenario from
-    `/estimate?s=...`. Tailoring answers may be added as further query parameters."""
+    `/estimate?s=...`. Tailoring answers may be added as further query parameters. When
+    the link was made under another engine version the result is recalculated under this
+    one and `notes` says so."""
     try:
-        inputs, rates_as_of = decode_scenario(query.s)
+        link = read_scenario_link(query.s)
     except ScenarioLinkError as exc:
         return problem(
             request,
             status=400,
             code="invalid-scenario-link",
             detail=exc.message,
-            errors=[{"pointer": "", "location": "query", "message": exc.message}],
+            errors=[{"pointer": "/s", "location": "query", "message": exc.message}],
             reason=exc.reason,
         )
     options = EstimateOptions(
@@ -281,7 +331,20 @@ def estimate_from_link(request: HttpRequest, query: Query[LinkQuery]) -> HttpRes
         include_narrative=query.include_narrative,
         include_immigration=query.include_immigration,
     )
-    return _run(request, inputs, rates_as_of, options, dict(request.GET.items()))
+    notes = (
+        [{"severity": "info", "code": "LINK_ENGINE_VERSION_CHANGED", "text": link.engine_notice}]
+        if link.engine_notice
+        else None
+    )
+    return _run(
+        request,
+        link.inputs,
+        link.rates_as_of,
+        options,
+        dict(request.GET.items()),
+        tailoring_in_query=True,
+        notes=notes,
+    )
 
 
 @api.get("/routes", response=RoutesResponse, summary="Supported routes", tags=["metadata"])

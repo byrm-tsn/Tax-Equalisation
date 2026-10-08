@@ -9,6 +9,7 @@ decimal strings, never floats.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Iterable
 from datetime import date
 from decimal import Decimal
@@ -28,7 +29,7 @@ from teq_engine.types import (
     SocialSecurityMode,
 )
 from teq_web.scenarios.capability import Refusal, country_name, describe_refusal, region_name
-from teq_web.scenarios.services import today
+from teq_web.scenarios.services import rates_date_problem, today
 
 __all__ = [
     "MAX_EXTRA_ITEMS",
@@ -206,6 +207,29 @@ class MoneyField(forms.DecimalField):
         result: Decimal | None = super().to_python(value)
         return result
 
+    def run_validators(self, value: Any) -> None:
+        """As Django, but one message once: a huge amount fails both the digit and the
+        maximum check, which share the same wording."""
+        try:
+            super().run_validators(value)
+        except forms.ValidationError as exc:
+            raise forms.ValidationError(list(dict.fromkeys(exc.messages))) from None
+
+
+# Control characters (including ESC) and the bidirectional embedding, override and
+# isolate characters, which can make a description display differently from its content.
+_BIDI_CONTROLS: Final = frozenset(chr(c) for c in (*range(0x202A, 0x202F), *range(0x2066, 0x206A)))
+
+
+def plain_text_problem(text: str, what: str) -> str | None:
+    """Why ``text`` cannot be used as free text on the page, or ``None``."""
+    if any(unicodedata.category(ch) == "Cc" or ch in _BIDI_CONTROLS for ch in text):
+        return (
+            f"The {what} cannot contain control characters or text-direction marks; "
+            "type it as plain text."
+        )
+    return None
+
 
 def _date_input() -> forms.DateInput:
     return forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
@@ -259,6 +283,13 @@ class ItemForm(forms.Form):
     )
     years = forms.CharField(label="Years", required=False, max_length=40, initial="ALL")
     treatment = forms.ChoiceField(label="Treatment", required=False, choices=TREATMENT_CHOICES)
+
+    def clean_label(self) -> str:
+        label: str = self.cleaned_data.get("label") or ""
+        problem = plain_text_problem(label, "description")
+        if problem is not None:
+            raise forms.ValidationError(problem)
+        return label
 
     def is_used(self) -> bool:
         """Whether the row holds an item (a blank row is ignored)."""
@@ -439,8 +470,31 @@ class ScenarioForm(forms.Form):
         self._formset: Any = None
         self._sources: list[tuple[str, int | None]] = []
 
+    def clean_rates_as_of(self) -> date:
+        value: date = self.cleaned_data["rates_as_of"]
+        problem = rates_date_problem(value)
+        if problem is not None:
+            raise forms.ValidationError(problem)
+        return value
+
+    def clean_fx_source(self) -> str:
+        source: str = self.cleaned_data.get("fx_source") or ""
+        problem = plain_text_problem(source, "source of the exchange rate")
+        if problem is not None:
+            raise forms.ValidationError(problem)
+        return source
+
     def clean(self) -> dict[str, Any]:
         cleaned: dict[str, Any] = super().clean() or {}
+        if (
+            _positive(cleaned.get("housing_contribution"))
+            and not _positive(cleaned.get("housing_amount"))
+            and "housing_amount" not in self.errors
+        ):
+            self.add_error(
+                "housing_contribution",
+                "Enter the housing amount, or leave the employee contribution blank.",
+            )
         rate, as_of = cleaned.get("fx_rate"), cleaned.get("fx_date")
         if rate is not None and as_of is None and "fx_date" not in self.errors:
             self.add_error("fx_date", "Enter the date of the exchange rate.")

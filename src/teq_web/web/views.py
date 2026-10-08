@@ -47,6 +47,7 @@ from teq_web.scenarios.services import (
     encode_scenario,
     estimate,
     immigration_panel,
+    read_scenario_link,
     today,
 )
 from teq_web.web.presenters import results_context
@@ -56,6 +57,7 @@ __all__ = [
     "estimate_page",
     "example",
     "page_not_found",
+    "request_too_large",
     "scenario_form",
     "server_error",
 ]
@@ -171,16 +173,19 @@ def example(request: HttpRequest) -> HttpResponse:
 
 @require_GET
 def estimate_page(request: HttpRequest) -> HttpResponse:
-    """``GET /estimate?s=...``: decode, calculate and show the results."""
-    token = request.GET.get("s", "")
-    if not token:
+    """``GET /estimate?s=...``: decode, calculate and show the results.
+
+    Pages and links echo the link's canonical encoding, never the query string as given.
+    """
+    if not request.GET.get("s", ""):
         return HttpResponseRedirect(reverse("form"))
     try:
-        inputs, rates_as_of = decode_scenario(token)
+        link = read_scenario_link(request.GET["s"])
     except ScenarioLinkError as exc:
         return _problem_page(
             request, status=400, title="This link cannot be read", message=exc.message
         )
+    inputs, rates_as_of, token = link.inputs, link.rates_as_of, link.token
     try:
         result = estimate(inputs, rates_as_of=rates_as_of)
     except UnsupportedRouteError as exc:
@@ -220,6 +225,8 @@ def estimate_page(request: HttpRequest) -> HttpResponse:
         panel=panel,
         tailoring_problems=problems,
         narrative=TemplateNarrator().narrate(result),
+        social_security=inputs.assumptions.social_security,
+        notices=[link.engine_notice] if link.engine_notice else [],
     )
     context["api_url"] = (
         reverse("api-v1:estimates")
@@ -233,16 +240,19 @@ def estimate_page(request: HttpRequest) -> HttpResponse:
 
 @require_GET
 def compare(request: HttpRequest) -> HttpResponse:
-    """The same scenario under UK National Insurance and under the Turkish scheme."""
-    token = request.GET.get("s", "")
-    if not token:
+    """The same scenario under UK National Insurance and under the Turkish scheme.
+
+    A column whose variant is too large to carry in a link is shown without a link.
+    """
+    if not request.GET.get("s", ""):
         return HttpResponseRedirect(reverse("form"))
     try:
-        inputs, rates_as_of = decode_scenario(token)
+        link = read_scenario_link(request.GET["s"])
     except ScenarioLinkError as exc:
         return _problem_page(
             request, status=400, title="This link cannot be read", message=exc.message
         )
+    inputs, rates_as_of, token = link.inputs, link.rates_as_of, link.token
     data = inputs.model_dump(mode="json")
     columns: list[dict[str, Any]] = []
     for mode, title in (
@@ -268,10 +278,17 @@ def compare(request: HttpRequest) -> HttpResponse:
             )
         except EngineError as exc:
             column["problem"] = exc.message
-        else:
+            continue
+        try:
             column["url"] = _results_url(encode_scenario(variant, rates_as_of))
+        except ScenarioTooLargeError:
+            column["link_note"] = (
+                "This variant is too large to carry in a link, so it has no results page "
+                "of its own; its figures are shown here."
+            )
     context = {
         "token": token,
+        "notices": [link.engine_notice] if link.engine_notice else [],
         "columns": columns,
         "rows": _compare_rows([column.get("result") for column in columns]),
         "edit_url": f"{reverse('form')}?{urlencode({'s': token})}",
@@ -334,6 +351,28 @@ def page_not_found(request: HttpRequest, exception: Exception | None = None) -> 
         status=404,
         title="Page not found",
         message="There is no page at this address. Start from the input form.",
+    )
+
+
+def request_too_large(request: HttpRequest) -> HttpResponse:
+    """413: the request body is over ``DATA_UPLOAD_MAX_MEMORY_SIZE``.
+
+    Problem details under ``/api/``, a plain HTML page elsewhere. The body is never read.
+    """
+    limit = settings.DATA_UPLOAD_MAX_MEMORY_SIZE
+    size = f" (the limit is {limit // 1024:,} KB)" if limit else ""
+    if request.path.startswith("/api/"):
+        return problem(
+            request,
+            status=413,
+            code="request-too-large",
+            detail=f"The request body is too large{size}. No figures were produced.",
+        )
+    return _problem_page(
+        request,
+        status=413,
+        title="Too much data was sent",
+        message=f"The form sent more data than the tool accepts{size}.",
     )
 
 

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -20,6 +22,24 @@ def _result(**changes: object):
 
 
 FX = {"rate": "65.7", "as_of": "2026-10-01"}
+
+
+def _items(**amounts: str) -> list[dict[str, Any]]:
+    """The reference items, with amounts changed by item id."""
+    items: list[dict[str, Any]] = [dict(item) for item in reference_example_data()["items"]]  # type: ignore[union-attr]
+    for item in items:
+        if item["id"] in amounts:
+            item["amount"] = amounts[item["id"]]
+    return items
+
+
+YEAR_2_RELOCATION = {
+    "id": "second-move",
+    "kind": "RELOCATION",
+    "amount": "10000.00",
+    "frequency": "ONE_OFF",
+    "years": [2],
+}
 
 SCENARIOS = {
     "reference": {},
@@ -46,7 +66,35 @@ SCENARIOS = {
         "hypothetical_tax": {"method": "OVERRIDE", "override": "25000.00"},
         "fx": FX,
     },
+    "relocation_excess": {"items": _items(relocation="10000.00")},
+    "home_scheme_excess": {
+        "assumptions": {"social_security": "HOME_SCHEME_AGREEMENT"},
+        "fx": {"rate": "55.25", "as_of": "2026-10-01"},
+        "items": _items(relocation="10000.00"),
+    },
+    "relocation_in_year_2": {"items": [*_items(), YEAR_2_RELOCATION]},
+    "tiny_net": {"hypothetical_tax": {"method": "OVERRIDE", "override": "89999.00"}},
+    "tiny_net_no_items": {
+        "hypothetical_tax": {"method": "OVERRIDE", "override": "89999.00"},
+        "items": [],
+    },
+    "ten_years": {"assignment": {"length_years": 10}},
 }
+
+
+def _text(name: str) -> str:
+    return " ".join(TemplateNarrator().narrate(_result(**SCENARIOS[name])))
+
+
+def _class_1_claims(text: str) -> list[str]:
+    """Sentences that mention Class 1 or Class 1A without negating it."""
+    sentences = re.split(r"(?<=[.;:])\s+", text)
+    return [
+        sentence
+        for sentence in sentences
+        if "Class 1" in sentence
+        and not re.search(r"\b(no|not|none|without)\b", sentence, flags=re.IGNORECASE)
+    ]
 
 
 def test_the_template_narrator_satisfies_the_protocol() -> None:
@@ -83,9 +131,97 @@ def test_home_scheme_narrative_names_the_turkish_line() -> None:
     assert "certificate of coverage" in text
 
 
+@pytest.mark.parametrize("name", ["home_scheme", "home_scheme_excess"])
+def test_home_scheme_narrative_makes_no_uk_national_insurance_claims(name: str) -> None:
+    text = _text(name)
+    assert _class_1_claims(text) == []
+    assert "so no UK National Insurance or Class 1A is due" in text
+    assert "No Class 1A National Insurance is due while the employee stays" in text
+    assert "employee National Insurance on top" not in text
+    assert "adds its own National Insurance" not in text
+    assert "after income tax and employee National Insurance" not in text
+    assert "is Turkish employer social security" in text
+    assert "£0" not in text
+
+
+def test_home_scheme_relocation_excess_has_no_class_1a() -> None:
+    text = _text("home_scheme_excess")
+    assert "£2,000 is above the cap and taxed as a benefit. It is paid in year 1" in text
+    assert "the relocation above the cap at £2,000" in text
+
+
 def test_relocation_excess_is_explained() -> None:
     text = " ".join(TemplateNarrator().narrate(_result(**SCENARIOS["one_year"])))
     assert "£2,000 is above the cap" in text
+
+
+def test_relocation_excess_names_each_benefit_with_its_value() -> None:
+    text = _text("relocation_excess")
+    assert (
+        "The housing (rent paid by the employer) at £30,000 and the relocation above the cap "
+        "at £2,000 are not cash pay, but taxable benefits in kind: their combined value of "
+        "£32,000 in year 1 is added to taxable pay"
+    ) in text
+    assert "Class 1A National Insurance on their value, £4,800 in year 1" in text
+    assert "£2,000 is above the cap and taxed as a benefit, with Class 1A" in text
+
+
+def test_items_are_placed_in_the_years_they_are_paid() -> None:
+    paragraphs = TemplateNarrator().narrate(_result(**SCENARIOS["relocation_in_year_2"]))
+    benefits = next(p for p in paragraphs if "taxable benefit in kind" in p)
+    year_one = benefits.split(" Later in the assignment")[0]
+    assert year_one.startswith("The housing (rent paid by the employer) is not cash pay")
+    assert "relocation" not in year_one
+    assert "its value of £30,000 in year 1" in year_one
+    assert "Later in the assignment, the relocation above the cap in year 2 is also" in benefits
+    relocation = next(p for p in paragraphs if p.startswith("The relocation of £8,000"))
+    first, second = relocation.split(". Relocation of £10,000")
+    assert "It is paid in year 1, which is why it disappears from the later years' totals" in first
+    assert "comes after the £8,000 exemption per move is used up" in second
+    assert "with Class 1A" in second
+    assert second.endswith("It is paid in year 2.")
+    assert "disappears" not in second
+
+
+def test_cost_below_the_salary_is_not_called_above_it() -> None:
+    text = _text("tiny_net")
+    assert "0.62 times the salary" in text
+    assert "The cost is above the salary" not in text
+
+
+def test_no_income_tax_means_no_claim_that_the_employer_pays_it() -> None:
+    text = _text("tiny_net_no_items")
+    assert "income tax on top" not in text
+    assert "tax is due on the tax" not in text
+    assert "The cost is above the salary" not in text
+    assert "UK National Insurance applies, but none is due in year 1" in text
+    assert "£0" not in text
+
+
+def test_national_insurance_sentences_skip_zero_lines() -> None:
+    text = _text("tiny_net")
+    assert "UK National Insurance is included: £1,029 from the employer in year 1." in text
+    assert "from the employee" not in text
+
+
+def test_the_number_check_ignores_digits_in_user_labels() -> None:
+    items = [
+        {"id": "flat", "kind": "HOUSING", "label": "Flat 4321", "amount": "30000.00"},
+        {"id": "move", "kind": "RELOCATION", "label": "Move 2468", "amount": "8000.00"}
+        | {"frequency": "ONE_OFF", "years": [1]},
+    ]
+    result = _result(items=items, fx={"rate": "65.7", "as_of": "2026-10-01", "source": "Feed 9753"})
+    paragraphs = TemplateNarrator().narrate(result)
+    text = " ".join(paragraphs)
+    assert "the flat 4321" in text.lower()
+    assert "move 2468" in text.lower()
+    assert unknown_numbers(paragraphs, result) == set()
+    # A label's digits cannot vouch for an invented figure.
+    assert unknown_numbers(["The cost is £4,321 and £9,753."], result) == {
+        Decimal("4321"),
+        Decimal("9753"),
+    }
+    assert Decimal("4321") not in figure_set(result)
 
 
 def test_the_number_check_catches_an_invented_figure(reference_result) -> None:

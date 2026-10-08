@@ -12,6 +12,8 @@ mypy src/teq_engine       # strict typing on the engine (src/teq_guidance is als
 
 ---
 
+**Test counts at the time of writing:** 606 in total: 273 engine (including the golden corpus and the review boundary cases), 106 guidance, 227 web. `ruff check`, `ruff format --check` and strict `mypy` on the engine and guidance packages are clean; `mypy src/teq_web` is also clean.
+
 ## 1. Golden figures (engine)
 
 The golden corpus in `tests/golden/*.json` holds inputs, expected figures and the engine version for each case; `tests/engine` runs it. A numeric difference fails the build unless the golden files, the engine version and the change log move together.
@@ -38,7 +40,7 @@ Thresholds are read from the rate sets and tested at the value and one penny eit
 
 ## 4. Guidance tests (`tests/guidance`)
 
-The immigration guidance package is tested separately (93 tests at the time of writing):
+The immigration guidance package is tested separately (106 tests at the time of writing):
 
 - **Pack loads and validates.** The bundled pack loads; its question ids are exactly the `TailoringAnswers` fields; every item cites a known GOV.UK source; every cost has a basis, a payer, a verification level and a date; every employer cost is marked as not recoverable from the worker. Validation rejects, and reports together, an unknown dependency, a dependency cycle, a condition on an unknown question (including inside a fee tier), a condition value that is not one of the question's options, a cost without a basis or payer, an unknown basis, an unknown source, an item with no source, a bare number where an amount should be a string, an unknown verification level and a wrong route.
 - **Reference scenario costs.** Visa 2 years, applied for outside the UK, medium or large sponsor, licence already held, no dependants, resident in Turkey: Certificate of Sponsorship £525, Immigration Skills Charge £2,640 (£1,320 for the first 12 months plus £660 x 2 further 6-month periods), visa fee £819, health surcharge £2,070 (£1,035 x 2 years). Employer-mandatory subtotal £3,165; applicant side £2,889 (of which the employer may pay by policy £2,889); the TB test is listed separately in lira (TRY 3,000 to 5,000) and is not added.

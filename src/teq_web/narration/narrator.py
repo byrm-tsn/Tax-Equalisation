@@ -4,6 +4,9 @@ A narrator describes; it never computes. :class:`TemplateNarrator` reads only th
 object, and every number it states is a figure the result already holds (tested with
 :func:`teq_web.narration.figures.unknown_numbers`). An optional generated narrator would
 implement the same :class:`Narrator` protocol and be held to the same check.
+
+Claims are conditional on the figures: a charge is mentioned only when its line is
+non-zero in the year described, and items are placed in the years they are paid in.
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ from decimal import Decimal
 from typing import Final, Protocol
 
 from teq_engine import CalculationResult, LineCode, Treatment, YearResult
+from teq_engine.types import ItemResult
 from teq_web.formatting import gbp, percent, uk_date, year_list
 
 __all__ = ["Narrator", "TemplateNarrator"]
@@ -78,12 +82,22 @@ def _item_name(label: str | None, kind: str) -> str:
     return text if text.startswith("the ") else f"the {text}"
 
 
+def _home_scheme(result: CalculationResult) -> bool:
+    """Whether the employee stays in the Turkish scheme (the engine adds its own line)."""
+    return any(year.has_line(LineCode.HOME_EMPLOYER_SOCIAL_SECURITY) for year in result.years)
+
+
 def _cost_drivers(year: YearResult) -> list[str]:
-    """Why a year costs more than the salary, from the lines that are present."""
-    taxes = "the UK income tax"
-    if _line(year, LineCode.EMPLOYEE_NIC):
-        taxes += " and employee National Insurance"
-    drivers = [f"the employer promises a net figure and pays {taxes} on top of it"]
+    """What the employer does that costs more than the salary, from the non-zero lines.
+
+    Each driver completes "the employer ...".
+    """
+    drivers = []
+    if _line(year, LineCode.INCOME_TAX):
+        taxes = "the UK income tax"
+        if _line(year, LineCode.EMPLOYEE_NIC):
+            taxes += " and employee National Insurance"
+        drivers.append(f"promises a net figure and pays {taxes} on top of it")
     if _line(year, LineCode.EMPLOYER_NIC):
         drivers.append("adds its own National Insurance")
     if _line(year, LineCode.HOME_EMPLOYER_SOCIAL_SECURITY):
@@ -91,6 +105,21 @@ def _cost_drivers(year: YearResult) -> list[str]:
     if _line(year, LineCode.BENEFIT_COST) or _line(year, LineCode.EXEMPT_COST):
         drivers.append("pays for the benefits as well")
     return drivers
+
+
+def _benefit_name(item: ItemResult) -> str:
+    """How the taxable part of an item is named: a capped relocation by its excess."""
+    name = _item_name(item.label, item.kind.value)
+    if item.treatment is Treatment.EXEMPT_CAPPED:
+        name = (name if name.startswith("the ") else f"the {name}") + " above the cap"
+    return name
+
+
+def _amounts_by_year(entries: list[tuple[int, Decimal]]) -> str:
+    """``£2,000``, or ``£2,000 in year 1 and £3,000 in year 2`` over several years."""
+    if len(entries) == 1:
+        return gbp(entries[0][1])
+    return _join([f"{gbp(amount)} in year {year}" for year, amount in entries])
 
 
 def _capitalise(text: str) -> str:
@@ -147,7 +176,10 @@ class TemplateNarrator:
             amount = _line(first, code)
             if amount:
                 parts.append(f"{gbp(amount)} {phrase}")
-        reason = " The cost is above the salary because " + _join(_cost_drivers(first)) + "."
+        reason = ""
+        drivers = _cost_drivers(first)
+        if drivers and first.line(LineCode.TOTAL_EMPLOYER_COST) > first.net_guarantee.salary:
+            reason = " The cost is above the salary because the employer " + _join(drivers) + "."
         split = (
             f" Of the {gbp(first.line(LineCode.TOTAL_EMPLOYER_COST))} in year 1, {_join(parts)}."
         )
@@ -203,31 +235,46 @@ class TemplateNarrator:
         else:
             when = "" if per_year == "a year" else " in year 1"
             text += f" With no allowance promised net, that is the net guarantee{when}."
+        on_top = (
+            "whatever UK tax arises"
+            if _home_scheme(result)
+            else "whatever UK tax and National Insurance arise"
+        )
         return text + (
-            " The employer bears whatever UK tax and National Insurance arise on top, so "
-            "the employee is no better and no worse off for moving."
+            f" The employer bears {on_top} on top, so the employee is no better and no "
+            "worse off for moving."
         )
 
     def _gross_up(self, result: CalculationResult) -> str:
         first = result.years[0]
         gross_up = first.gross_up
-        text = (
-            "Because the employer pays the employee's UK tax, that payment is itself "
-            "taxable pay, so tax is due on the tax. The gross pay is therefore the figure "
-            "that leaves exactly the net guarantee after income tax and employee National "
-            "Insurance, and the tool solves for it exactly rather than by trial and error."
-        )
+        home = _home_scheme(result)
+        after = "income tax" if home else "income tax and employee National Insurance"
+        if _line(first, LineCode.INCOME_TAX):
+            text = (
+                "Because the employer pays the employee's UK tax, that payment is itself "
+                "taxable pay, so tax is due on the tax. The gross pay is therefore the "
+                f"figure that leaves exactly the net guarantee after {after}, and the tool "
+                "solves for it exactly rather than by trial and error."
+            )
+        else:
+            text = (
+                "The employer would pay any UK tax on the employee's pay, so the gross pay "
+                f"is the figure that leaves exactly the net guarantee after {after}."
+            )
         if gross_up.marginal_rate > 0:
+            income_tax = percent(gross_up.income_tax_marginal_rate)
             if gross_up.nic_marginal_rate > 0:
                 rates = (
-                    f"income tax is {percent(gross_up.income_tax_marginal_rate)} and employee "
-                    f"National Insurance {percent(gross_up.nic_marginal_rate)}, a combined "
-                    f"marginal rate of {percent(gross_up.marginal_rate)}"
+                    f"income tax is {income_tax} and employee National Insurance "
+                    f"{percent(gross_up.nic_marginal_rate)}, a combined marginal rate of "
+                    f"{percent(gross_up.marginal_rate)}"
                 )
+            elif home:
+                rates = f"income tax is {income_tax} and no UK National Insurance applies"
             else:
                 rates = (
-                    f"income tax is {percent(gross_up.income_tax_marginal_rate)} and no UK "
-                    "National Insurance applies"
+                    f"income tax is {income_tax} and no employee National Insurance is due on them"
                 )
             text += f" In year 1 the last pounds of pay fall where {rates},"
         else:
@@ -251,63 +298,112 @@ class TemplateNarrator:
         return text
 
     def _benefits(self, result: CalculationResult) -> str | None:
+        """The taxable benefits of year 1 by item, then any that start later."""
         first = result.years[0]
-        benefit = _line(first, LineCode.BENEFIT_COST)
-        if not benefit:
+        year_one: list[tuple[str, Decimal]] = []
+        later: list[tuple[str, tuple[int, ...]]] = []
+        for item in result.items:
+            by_year = {
+                allocation.assignment_year: allocation.taxable_benefit
+                for allocation in item.allocations
+                if allocation.taxable_benefit > 0
+            }
+            if first.assignment_year in by_year:
+                year_one.append((_benefit_name(item), by_year[first.assignment_year]))
+            elif by_year:
+                later.append((_benefit_name(item), tuple(sorted(by_year))))
+        if not year_one and not later:
             return None
-        names = [
-            _item_name(item.label, item.kind.value)
-            for item in result.items
-            if item.treatment is Treatment.TAXABLE_BIK
-        ]
-        if any(item.excess for item in result.items):
-            names.append("the relocation above the cap")
-        plural = len(names) > 1
-        what = _capitalise(_join(names)) if names else "The taxable benefit"
-        verb, pronoun = ("are", "their") if plural else ("is", "its")
-        kind = "taxable benefits in kind" if plural else "a taxable benefit in kind"
-        text = (
-            f"{what} {verb} not cash pay, but {kind}: {pronoun} value of "
-            f"{gbp(benefit)} in year 1 is added to taxable pay, which becomes "
-            f"{gbp(first.line(LineCode.TAXABLE_PAY))}. That raises the income tax the "
-            "employer must cover, and the extra tax is itself grossed up."
-        )
-        class_1a = _line(first, LineCode.CLASS_1A)
-        if class_1a:
-            text += (
-                " The employee pays no National Insurance on a benefit; instead the employer "
-                f"pays Class 1A National Insurance on {pronoun} value, {gbp(class_1a)} in year 1."
+        text = ""
+        if year_one:
+            plural = len(year_one) > 1
+            verb, pronoun = ("are", "their") if plural else ("is", "its")
+            kind = "taxable benefits in kind" if plural else "a taxable benefit in kind"
+            if plural:
+                what = _join([f"{name} at {gbp(value)}" for name, value in year_one])
+                value = f"their combined value of {gbp(first.gross_up.taxable_benefits)}"
+            else:
+                what, value = year_one[0][0], f"its value of {gbp(year_one[0][1])}"
+            text = (
+                f"{_capitalise(what)} {verb} not cash pay, but {kind}: {value} in year 1 is "
+                f"added to taxable pay, which becomes {gbp(first.line(LineCode.TAXABLE_PAY))}. "
+                "That raises the income tax the employer must cover, and the extra tax is "
+                "itself grossed up."
             )
-        else:
-            text += (
-                " No Class 1A National Insurance is due while the employee stays in the "
-                "Turkish scheme."
-            )
+            class_1a = _line(first, LineCode.CLASS_1A)
+            if class_1a:
+                text += (
+                    " The employee pays no National Insurance on a benefit; instead the "
+                    f"employer pays Class 1A National Insurance on {pronoun} value, "
+                    f"{gbp(class_1a)} in year 1."
+                )
+            elif _home_scheme(result):
+                text += (
+                    " No Class 1A National Insurance is due while the employee stays in the "
+                    "Turkish scheme."
+                )
+        if later:
+            parts = _join([f"{name} in {year_list(years)}" for name, years in later])
+            plural = len(later) > 1
+            if year_one:
+                kind = "taxable benefits in kind" if plural else "a taxable benefit in kind"
+                text += (
+                    f" Later in the assignment, {parts} {'are' if plural else 'is'} also {kind}."
+                )
+            else:
+                kind = "taxable benefits in kind" if plural else "a taxable benefit in kind"
+                text = (
+                    f"{_capitalise(parts)} {'are' if plural else 'is'} not cash pay, but {kind}: "
+                    "the value is added to taxable pay in the year it is paid, which raises the "
+                    "income tax the employer must cover."
+                )
         return text
 
     def _relocation(self, result: CalculationResult) -> str | None:
+        """Each relocation under the cap: what is exempt, what is taxed, and when."""
         moves = [item for item in result.items if item.treatment is Treatment.EXEMPT_CAPPED]
         if not moves:
             return None
+        last_year = result.years[-1].assignment_year
+        class_1a_years = {y.assignment_year for y in result.years if _line(y, LineCode.CLASS_1A)}
         sentences = []
         for item in moves:
             name = _capitalise(_item_name(item.label, item.kind.value))
+            exempt = [(a.assignment_year, a.exempt) for a in item.allocations if a.exempt > 0]
+            excess = [
+                (a.assignment_year, a.taxable_benefit)
+                for a in item.allocations
+                if a.taxable_benefit > 0
+            ]
+            cap = f" up to {gbp(item.cap)} per move" if item.cap is not None else ""
             sentence = f"{name} of {gbp(item.annual_amount)}"
-            if item.cap is not None:
+            if not excess:
                 sentence += (
-                    f" is exempt from tax and National Insurance up to {gbp(item.cap)} per move"
+                    f" is exempt from tax and National Insurance{cap}, so it costs the "
+                    "employer only its face value"
                 )
             else:
-                sentence += " is exempt from tax and National Insurance"
-            if item.excess:
-                sentence += (
-                    f"; {gbp(item.excess)} is above the cap and is taxed as a benefit, with "
-                    "Class 1A"
-                )
-            else:
-                sentence += ", so it costs the employer only its face value"
+                if exempt:
+                    verb = "is" if len(excess) == 1 else "are"
+                    sentence += (
+                        f" is exempt from tax and National Insurance{cap}; "
+                        f"{_amounts_by_year(excess)} {verb} above the cap and taxed as a benefit"
+                    )
+                elif item.cap is not None:
+                    sentence += (
+                        f" comes after the {gbp(item.cap)} exemption per move is used up, so "
+                        "all of it is taxed as a benefit"
+                    )
+                else:
+                    sentence += " is taxed as a benefit"
+                years = [year for year, _ in excess]
+                with_class_1a = [year for year in years if year in class_1a_years]
+                if with_class_1a == years:
+                    sentence += ", with Class 1A"
+                elif with_class_1a:
+                    sentence += f", with Class 1A in {year_list(tuple(with_class_1a))}"
             sentence += f". It is paid in {year_list(item.years)}"
-            if len(result.years) > 1 and item.years != "ALL":
+            if item.years != "ALL" and max(item.years) < last_year:
                 sentence += ", which is why it disappears from the later years' totals"
             sentences.append(sentence + ".")
         return " ".join(sentences)
@@ -324,12 +420,17 @@ class TemplateNarrator:
                 "assignment look cheaper than it is. A certificate of coverage is needed "
                 "before the assignment starts."
             )
-        text = (
-            "UK National Insurance is included: "
-            f"{gbp(first.line(LineCode.EMPLOYEE_NIC))} from the employee (which the employer "
-            f"grosses up) and {gbp(first.line(LineCode.EMPLOYER_NIC))} from the employer in "
-            "year 1."
-        )
+        parts = []
+        employee = _line(first, LineCode.EMPLOYEE_NIC)
+        employer = _line(first, LineCode.EMPLOYER_NIC)
+        if employee:
+            parts.append(f"{gbp(employee)} from the employee (which the employer grosses up)")
+        if employer:
+            parts.append(f"{gbp(employer)} from the employer")
+        if parts:
+            text = f"UK National Insurance is included: {_join(parts)} in year 1."
+        else:
+            text = "UK National Insurance applies, but none is due in year 1 at this level of pay."
         if "SOCIAL_SECURITY_AGREEMENT_MAY_APPLY" in result.warning_codes():
             text += (
                 " The UK and Turkey have a social security agreement: with a certificate of "

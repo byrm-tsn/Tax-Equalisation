@@ -6,11 +6,21 @@ pence and anything else to the penny, exactly as the result holds it.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Final
 
-__all__ = ["as_decimal", "gbp", "number", "percent", "uk_date", "year_list"]
+__all__ = [
+    "as_decimal",
+    "gbp",
+    "number",
+    "percent",
+    "plain_number",
+    "uk_date",
+    "year_list",
+    "year_span",
+]
 
 _MONTHS: Final = (
     "January",
@@ -64,6 +74,22 @@ def gbp(value: object) -> str:
     return f"-£{text}" if amount < 0 else f"£{text}"
 
 
+def plain_number(value: object) -> str:
+    """A figure as entered, without trailing zeros: ``55.250000`` -> ``55.25``.
+
+    For values the engine stores at a fixed precision (an exchange rate is kept to six
+    decimal places) but the user typed more briefly. Never rounds.
+    """
+    amount = as_decimal(value)
+    if amount is None:
+        return "" if value is None else str(value)
+    normalised = amount.normalize()
+    exponent = normalised.as_tuple().exponent
+    if isinstance(exponent, int) and exponent > 0:  # 1E+2 -> 100
+        normalised = normalised.quantize(Decimal(1))
+    return f"{normalised:,f}"
+
+
 def percent(value: object) -> str:
     """A rate as a percentage: ``0.47`` -> ``47%``, ``0.075`` -> ``7.5%``."""
     rate = as_decimal(value)
@@ -96,3 +122,16 @@ def year_list(years: object) -> str:
             return f"year {numbers[0]}"
         return "years " + ", ".join(numbers[:-1]) + " and " + numbers[-1]
     return str(years)
+
+
+def year_span(years: Iterable[int]) -> str:
+    """Assignment years as a phrase: ``year 2``, ``years 1 and 2``, ``years 2 to 10``.
+
+    Three or more consecutive years read as a range; anything else is listed.
+    """
+    numbers = sorted(set(years))
+    if not numbers:
+        return ""
+    if len(numbers) >= 3 and numbers == list(range(numbers[0], numbers[-1] + 1)):
+        return f"years {numbers[0]} to {numbers[-1]}"
+    return year_list(tuple(numbers))
