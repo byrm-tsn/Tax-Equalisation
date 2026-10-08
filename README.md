@@ -43,7 +43,7 @@ The web paths and commands below are the intended contract; if any differ in the
 | Path | Purpose |
 |---|---|
 | `/healthz` | Process is up |
-| `/readyz` | Database reachable and migrations applied |
+| `/readyz` | Rate sets and the guidance pack load correctly (the production design adds database and migration checks) |
 | `/selftest/golden` | Runs the reference example and checks £188,676 and £180,676 |
 
 ### Command line

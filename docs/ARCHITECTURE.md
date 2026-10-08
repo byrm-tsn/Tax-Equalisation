@@ -97,7 +97,7 @@ Running payroll, filing anything, giving tax or immigration advice, routes beyon
 ### 3.2 The gross-up solver
 
 - Problem: find G with `G - IncomeTax(G + BIK) - EmployeeNICs(G) = N`.
-- `net(G)` is continuous, piecewise linear and strictly increasing because every marginal rate is below 100% (the worst segment is the personal-allowance taper band with a 60% income-tax rate plus 2% NICs, slope 0.38). The solution is unique.
+- `net(G)` is continuous, piecewise linear and strictly increasing because every marginal rate is below 100% (the worst segment is the personal-allowance taper band, a 60% effective income-tax rate, combined with 8% employee NICs when cash pay is still below the upper earnings limit: a 68% marginal rate, slope 0.32). The solution is unique.
 - **Primary method: exact segment solve.** Collect every breakpoint in gross-cash space: personal allowance threshold, taper start and end (£100,000 and £125,140 in total-income space, so shifted left by the benefit value), each band edge mapped back through the taxable-income relationship, and the NIC primary threshold and upper earnings limit. Evaluate `net` at each sorted breakpoint, find the segment containing N, solve the linear equation. Iteration-free, deterministic, and the trace can show the segment and the marginal rate ("47% = 45% income tax + 2% NICs" for the reference case).
 - **Post-condition** `|net(G) - N| <= 0.0001`. On failure, fall back to bracketed bisection on `[0, N / (1 - max_marginal)]` with at most 200 iterations and emit `GROSS_UP_FALLBACK_BISECTION`; if that fails too, raise `SolverError` so the run is `FAILED` with code `GROSS_UP_NOT_CONVERGED`. No partial numbers are shown. Both paths are alerted on because the fallback hides a breakpoint bug.
 - **Rate-set validation** rejects any table with a marginal rate at or above 100% at approval time, which guarantees monotonicity before the solver ever runs.
@@ -498,6 +498,7 @@ Checked and left unchanged: the gross-up breakpoints, the rounding policy, the r
   "rates_as_of": "2026-10-08",
   "rate_set_ids": ["UK_INCOME_TAX:2026-27:v1", "UK_NIC:2026-27:v1", "UK_BENEFIT_RULES:2026-27:v1", "TR_INCOME_TAX:2026:v1", "TR_SGK:2026:v1"],
   "rate_set_fingerprint": "sha256:…",
+  "cache_key": "sha256:…",
   "period_mode": "ILLUSTRATIVE_WHOLE_YEAR",
   "inputs_hash": "sha256:…",
   "currency": "GBP",
@@ -640,7 +641,7 @@ Request:
 }
 ```
 
-Response: `200` with the Appendix A body. Validation failure: `422` problem details with `errors: [{"pointer": "/hypothetical_tax/override", "message": "must be below salary"}]`. Unsupported route: `422` with code `route-not-supported` and `supported_routes`. Safe to cache by `inputs_hash + rate_set_fingerprint + engine_version`.
+Response: `200` with the Appendix A body. Validation failure: `422` problem details with `errors: [{"pointer": "/hypothetical_tax/override", "message": "must be below salary"}]`. Unsupported route: `422` with code `route-not-supported` and `supported_routes`. Safe to cache by the result's `cache_key`, which is derived from `inputs_hash`, `rate_set_fingerprint` (sorted rate-set ids with their content checksums), `engine_version` and `rates_as_of`; the date must be in the key because the same inputs map to different tax years on different dates.
 
 ## Appendix F. Reference pack versus current guidance (as found on 7 and 8 October 2026)
 
