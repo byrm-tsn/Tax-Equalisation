@@ -54,7 +54,7 @@ def test_relocation_split_across_years(ref_data: dict[str, Any]) -> None:
     assert relocation.excess == Decimal("4000.00")
     excess = [w for w in result.warnings if w.code == "RELOCATION_EXCESS_TAXABLE"]
     assert [w.assignment_year for w in excess] == [2]
-    assert "£2000.00 of exemption left" in excess[0].text
+    assert "£2,000 of exemption left" in excess[0].text
 
 
 def test_relocation_outside_window(ref_data: dict[str, Any]) -> None:

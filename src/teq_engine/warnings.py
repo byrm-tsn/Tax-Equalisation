@@ -17,6 +17,7 @@ from __future__ import annotations
 import string
 from collections.abc import Mapping
 from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Final, Literal
@@ -457,7 +458,44 @@ def render(code: Code, params: Mapping[str, str] | None = None) -> tuple[str, st
     missing = entry.fields() - values.keys()
     if missing:
         raise KeyError(f"{code}: missing template parameters {sorted(missing)}")
-    return entry.template.format(**values), entry.question.format(**values)
+    shown = {name: _for_prose(name, value) for name, value in values.items()}
+    return entry.template.format(**shown), entry.question.format(**shown)
+
+
+# Parameters that carry money. They stay plain decimal strings in ``Warning.params``
+# (machine-readable) and gain thousands separators only in the rendered prose.
+MONEY_FIELDS: Final[frozenset[str]] = frozenset(
+    {
+        "amount",
+        "amount_gbp",
+        "amount_try",
+        "cap",
+        "ceiling",
+        "excess",
+        "remaining",
+        "salary_gbp",
+        "salary_try",
+        "taper_end",
+        "taper_start",
+        "total_income",
+    }
+)
+
+
+def _for_prose(name: str, value: str) -> str:
+    """Format a money parameter for prose (``30,000`` or ``66,000.26``); others pass through."""
+    if name not in MONEY_FIELDS:
+        return value
+    try:
+        amount = Decimal(value)
+    except (InvalidOperation, ValueError):
+        return value
+    if not amount.is_finite():
+        return value
+    quantised = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if quantised == quantised.to_integral_value():
+        return f"{quantised:,.0f}"
+    return f"{quantised:,.2f}"
 
 
 def make_warning(code: Code, *, assignment_year: int | None = None, **params: str) -> Warning:

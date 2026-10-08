@@ -43,7 +43,7 @@ def test_fx_supplied_is_recorded_and_override_shows_comparison(ref_data: dict[st
     assert result.hypothetical_tax.mode == "OVERRIDE"
     assert result.hypothetical_tax.calculated_for_comparison == Decimal("34212.20")
     override = next(a for a in result.assumptions if a.code == "HYPO_TAX_OVERRIDE")
-    assert "£34212.20" in override.text
+    assert "£34,212.20" in override.text
     # The FX snapshot alone does not change any figure under an override.
     assert result.year(1).line(LineCode.TOTAL_EMPLOYER_COST) == 188676
 
@@ -82,7 +82,7 @@ def test_home_scheme_lines(ref_data: dict[str, Any]) -> None:
         assert year.decomposition.foots
     estimated = [w for w in result.warnings if w.code == "HOME_EMPLOYER_SOCIAL_SECURITY_ESTIMATED"]
     assert [w.assignment_year for w in estimated] == [1, 2]
-    assert "766956.60" in estimated[0].text
+    assert "766,956.60" in estimated[0].text
     assert "HOME_SCHEME_CERTIFICATE_REQUIRED" in result.assumption_codes()
     assert "UK_NIC_APPLIES" not in result.assumption_codes()
     # The home-scheme line appears in the totals, so the toggle cannot hide it.

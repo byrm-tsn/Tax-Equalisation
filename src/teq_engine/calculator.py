@@ -63,7 +63,7 @@ from teq_engine.ratesets.schemas import (
 )
 from teq_engine.routes.registry import RouteSpec, resolve_route
 from teq_engine.solver import GrossUpProblem, gross_breakpoints, solve_gross_up
-from teq_engine.trace import TraceBuilder, fmt_money, fmt_percent, fmt_rate
+from teq_engine.trace import TraceBuilder, fmt_money, fmt_money_text, fmt_percent, fmt_rate
 from teq_engine.treatments import NIC_CLASS, Treatment, default_treatment, display_label
 from teq_engine.types import (
     AllocationLine,
@@ -897,7 +897,7 @@ def _calculate(
         if override.calculated_for_comparison is not None:
             note = (
                 " Calculated under the Turkish rules at the FX snapshot it would be "
-                f"£{fmt_money(override.calculated_for_comparison)}."
+                f"£{fmt_money_text(override.calculated_for_comparison)}."
             )
         collector.assume(
             Code.HYPO_TAX_OVERRIDE, amount=fmt_money(override.amount), comparison_note=note

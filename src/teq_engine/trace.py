@@ -35,6 +35,17 @@ def fmt_money(value: Decimal) -> str:
         return str(value.quantize(PENNY, rounding=ROUND_HALF_UP))
 
 
+def fmt_money_text(value: Decimal) -> str:
+    """Render an amount for prose with thousands separators (``30,000`` or ``66,000.26``).
+
+    Trace values keep :func:`fmt_money`; this is for warning and assumption texts only.
+    """
+    with engine_context():
+        q = value.quantize(PENNY, rounding=ROUND_HALF_UP)
+        whole = q == q.to_integral_value()
+        return f"{q:,.0f}" if whole else f"{q:,.2f}"
+
+
 def fmt_percent(rate: Decimal) -> str:
     """Render a rate as a percentage (``0.45`` -> ``45%``, ``0.075`` -> ``7.5%``)."""
     with engine_context():
