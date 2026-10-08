@@ -1,22 +1,25 @@
 # Verification
 
-What is verified, how, and what could not be verified from the environment the slice was built in. The acceptance criteria themselves are in [ARCHITECTURE.md, section 12](ARCHITECTURE.md#12-verification-acceptance-criteria).
+What is verified, how, and which facts have not been re-verified against the official pages. The acceptance criteria themselves are in [ARCHITECTURE.md, section 12](ARCHITECTURE.md#12-verification-acceptance-criteria).
 
-Run everything with:
+Run everything with `make check`, or step by step:
 
 ```bash
-pytest -q                 # engine, golden corpus, guidance, and web tests
-ruff check                # lint
-mypy src/teq_engine       # strict typing on the engine (src/teq_guidance is also clean under strict mypy)
+pytest -q                                          # engine, golden corpus, guidance and web tests
+ruff check src tests                               # lint
+ruff format --check src tests                      # formatting
+mypy src/teq_engine src/teq_guidance src/teq_web   # strict typing
 ```
+
+The same steps run in continuous integration on every push and pull request (`.github/workflows/ci.yml`).
 
 ---
 
-**Test counts at the time of writing:** 671 in total: 279 engine (including the golden corpus and the review boundary cases), 109 guidance, 283 web. `ruff check`, `ruff format --check` and strict `mypy` on the engine and guidance packages are clean; `mypy src/teq_web` is also clean.
+**Test counts as of 8 October 2026:** 676 in total: 279 engine (including the golden corpus and the boundary cases added after the reviews in section 8), 113 guidance, 284 web. `ruff check`, `ruff format --check` and strict `mypy` on all three packages are clean.
 
 ## 1. Golden figures (engine)
 
-The golden corpus in `tests/golden/*.json` holds inputs, expected figures and the engine version for each case; `tests/engine` runs it. A numeric difference fails the build unless the golden files, the engine version and the change log move together.
+The golden corpus in `tests/golden/*.json` holds inputs, expected figures and the engine version for each case; `tests/engine/test_golden.py` runs it. A numeric difference fails the tests, and a golden file computed under another engine version fails too, so changing a figure means updating the golden files and bumping the engine version together; the change is recorded in [CHANGELOG.md](../CHANGELOG.md).
 
 **Engine 0.2.0** (8 October 2026) changed no figure: `RATES_NOT_PUBLISHED_FOR_YEAR` became info rather than warning and names Turkish rates only when the scenario uses them (a calculated hypothetical tax or home-scheme social security), a supplied hypothetical tax whose comparison uses carried-forward Turkish rates says so in its note, and the marginal-cost line reads "Cost to the employer of £1 more net pay"; the golden files moved to 0.2.0 with it.
 
@@ -42,42 +45,42 @@ Thresholds are read from the rate sets and tested at the value and one penny eit
 
 ## 4. Guidance tests (`tests/guidance`)
 
-The immigration guidance package is tested separately (109 tests at the time of writing):
+The immigration guidance package is tested separately (113 tests as of 8 October 2026):
 
-- **Pack loads and validates.** The bundled pack loads; its question ids are exactly the `TailoringAnswers` fields; every item cites a known GOV.UK source; every cost has a basis, a payer, a verification level and a date; every employer cost is marked as not recoverable from the worker. Validation rejects, and reports together, an unknown dependency, a dependency cycle, a condition on an unknown question (including inside a fee tier), a condition value that is not one of the question's options, a cost without a basis or payer, an unknown basis, an unknown source, an item with no source, a bare number where an amount should be a string, an unknown verification level and a wrong route.
+- **Pack loads and validates.** The bundled pack loads; its question ids are exactly the `TailoringAnswers` fields; every item cites a known GOV.UK source; every cost has a basis, a payer, a verification level and a date; every employer cost is marked as not recoverable from the worker. Validation rejects, and reports together, an unknown dependency, a dependency cycle, a condition on an unknown question (including inside a fee tier), a condition value that is not one of the question's options, a cost without a basis or payer, an unknown basis, an unknown source, an item with no source, a bare number where an amount should be a string, an unknown verification level, `computed` on a pack item, and a wrong route.
 - **Reference scenario costs.** Visa 2 years, applied for outside the UK, medium or large sponsor, licence already held, no dependants, resident in Turkey: Certificate of Sponsorship £525, Immigration Skills Charge £2,640 (£1,320 for the first 12 months plus £660 x 2 further 6-month periods), visa fee £819, health surcharge £2,070 (£1,035 x 2 years). Employer-mandatory subtotal £3,165; applicant side £2,889 (of which the employer may pay by policy £2,889); the TB test is listed separately in lira (TRY 3,000 to 5,000) and is not added.
 - **Variants.** Without a licence the licence fee adds £1,682 (employer-mandatory £4,847); a small sponsor pays £611 and £960 of skills charge over two years; one partner and one child add £819 + £819 in fees and £2,070 + £1,552 in surcharge; three children, five-year visas and inside-UK applications use the right tiers; a fee the pack does not hold is shown as not held and kept out of the subtotals; maintenance funds include the dependants' amounts.
 - **Conditional content.** Documents, stages and costs appear and disappear with the answers (TB certificate, criminal record certificate, funds evidence, dependants' documents, English evidence variants, the licence stage and fee). The condition operators (`equals`, `in`, `gte`, `gt`, `lte`, `all`, `any`) are tested directly, including that `true` never matches `1`.
 - **Critical path.** With a licence held and a TB test needed: 43 to 112 days, 6 to 16 weeks, critical path English test, application, decision, travel. Without a licence: 70 to 145 days, 10 to 21 weeks, critical path licence, CoS, application, decision, travel. Totals are checked against an independent enumeration of every path for 16 combinations of answers, every stage on the critical path is marked (and only those), consecutive critical stages are linked by a dependency, and the parallel groups and phases are as expected.
-- **Panel.** The panel holds only plain data (dicts, lists, strings, ints, bools, `None`; no floats, decimals, tuples or dates) and survives a JSON round trip; the posted-by-the-Turkish-employer answer (or "undecided") adds the Global Business Mobility route note; unanswered questions are listed with the assumption used; content older than the configured age carries `IMMIGRATION_CONTENT_STALE`.
+- **Panel.** The panel holds only plain data (dicts, lists, strings, ints, bools, `None`; no floats, decimals, tuples or dates) and survives a JSON round trip; the posted-by-the-Turkish-employer answer (or "undecided") adds the Global Business Mobility route note; unanswered questions are listed with the assumption used; every item carries its verification level with its label, and the three levels are explained in words; content older than the configured age carries `IMMIGRATION_CONTENT_STALE`.
 
 ## 5. Manual checks
 
-The rehearsal, from a fresh clone, in under ten minutes:
+From a fresh clone, in under ten minutes:
 
 1. Install, migrate, run (see the README).
 2. Open `/example`: the headline shows year 1 £188,676, year 2 £180,676, total £369,352.
 3. Change housing (for example to £36,000) and resubmit: the gross-up, Class 1A and totals move; the per-year table still foots.
 4. Flip the NIC coverage toggle to home-scheme: UK NICs and Class 1A go to zero and the Turkish employer contribution line appears with its warning.
-5. Open the Immigration tab: the process in order, documents with reasons, costs with payers and formulas, subtotals, the critical-path timeline as a range, family, the verified date and sources.
+5. Open the Immigration tab: the process in order, documents with reasons, costs with payers and formulas, subtotals, the critical-path timeline as a range, family, the verified date, and each item's verification level and source.
 6. On the Explain tab, open the calculation trace: the segment ("IT 45% + NIC 2%"), marginal rate 0.47, exact gross £127,761.51, rounded £127,762, net delivered £66,000.26.
 7. `python src/manage.py estimate --example` prints the same figures as the page.
 8. Request Scotland or another route: the capability message, not a number.
 
 ---
 
-## 6. What could not be verified from this environment
+## 6. Facts not re-verified against the official pages
 
-The build environment could not open GOV.UK, legislation.gov.uk, gib.gov.tr (the Turkish Revenue Administration) or thecozm.com pages directly. Figures were confirmed from search results quoting those pages where possible, and every guidance item says how it was verified:
+Every requirement, document, cost, stage and note in the immigration guidance pack carries one of three verification levels and a link to its GOV.UK source, and the Immigration tab shows both beside the item. What falls under each level:
 
-- **search_confirmed**: confirmed from search results quoting the official page. Still worth a click on the page before the figures are relied on.
-- **third_party_reported**: reported by third parties; **these need checking on the page.** They are: the visa application fees from 8 April 2026 (£819 up to 3 years and £1,618 over 3 years from outside the UK, £943 up to 3 years from inside), the sponsor licence fee from 8 April 2026 (£1,682 medium or large, £611 small or charitable), the licence priority service (about £750), the Certificate of Sponsorship fee for 2026 (£525; it was £525 from 9 April 2025, which is search-confirmed), the licence processing time (about 8 weeks), and the TB test price in Turkey (TRY 3,000 to 5,000).
-- **from_knowledge**: not re-checked for this pack. These include the maintenance funds (£1,270, and £285, £315 and £200 for dependants), the reduced salary thresholds (new entrants from £33,400), the application window (up to 3 months before the CoS start date), the CoS validity (3 months), the TB certificate validity (6 months), priority and super priority visa prices (about £500 and £1,000), the English test price (about £150 to £200), the rule since 31 December 2024 that the licence and CoS fees cannot be passed to the worker, the end of licence renewal (April 2024), sponsor duties, the Temporary Shortage List dependants rule, and the typical duration of each timeline stage.
+- **Official source** (`official_source`): traced to the wording of the official page. This covers the Immigration Skills Charge (£1,320 for a medium or large sponsor and £480 for a small or charitable one, for the first 12 months, from 16 December 2025), the Immigration Health Surcharge (£1,035 a year, £776 for a child), the salary threshold (£41,700 or the going rate, basic pay only), the RQF level 6 requirement, English at B2 from 8 January 2026, the TB test for residents of Turkey, and the usual decision times (3 weeks from outside the UK, 8 weeks from inside). Fees change, usually each April, so check the linked page before relying on a figure.
+- **Third-party report** (`third_party`): reported by third parties and not yet confirmed on the official page. **These need checking on GOV.UK before the figures are relied on.** They are the visa application fees from 8 April 2026 (£819 up to 3 years and £1,618 over 3 years from outside the UK, £943 up to 3 years from inside), for the main applicant and for each dependant; the sponsor licence fee from 8 April 2026 (£1,682 medium or large, £611 small or charitable); the licence priority service (about £750); the Certificate of Sponsorship fee for 2026 (£525: the same fee from 9 April 2025 is traced to the official page, but not that it is unchanged for 2026); the licence processing time (about 8 weeks); and the TB test price in Turkey (TRY 3,000 to 5,000).
+- **Not re-verified** (`unverified`): stated from general knowledge of the rules and not re-verified against the official page; confirm each before relying on it. This covers the maintenance funds (£1,270, and £285, £315 and £200 for dependants), the reduced salary thresholds (new entrants from £33,400), the application window (up to 3 months before the CoS start date), the CoS validity (3 months), the TB certificate validity (6 months), the priority and super priority visa prices (about £500 and £1,000), the English test price (about £150 to £200), the rule since 31 December 2024 that the licence and CoS fees cannot be passed to the worker, the end of licence renewal (April 2024), the sponsor's duties, the Temporary Shortage List dependants rule, and the typical duration of each timeline stage.
 - **Not held at all**: the visa fee for more than 3 years from inside the UK after 8 April 2026. The panel shows "not held" and points to the source rather than guessing.
-- **Added source URL**: the Global Business Mobility Senior or Specialist Worker page (`https://www.gov.uk/senior-specialist-worker-visa`) is cited from knowledge of GOV.UK's URL scheme and was not opened.
-- **Tax side**: the 2026/27 UK thresholds are search-confirmed as frozen; the HS212 edition reading, the Turkish 2026 wage brackets, minimum wage, SGK ceiling and incentive, and the social security convention's period limit were not verified on gib.gov.tr or legislation.gov.uk.
+- **A source link not checked**: the link to the Global Business Mobility Senior or Specialist Worker page (`https://www.gov.uk/senior-specialist-worker-visa`) follows GOV.UK's address pattern and has not been checked.
+- **Tax side**: that the 2026/27 UK thresholds are frozen, and that the Turkish social security ceiling rose to 9 times the minimum wage from 1 January 2026, are traced to official sources. The HS212 edition reading, the Turkish 2026 wage brackets, the minimum wage, the ceiling amount, the employer incentive and the social security convention's period limit have not been re-verified against gib.gov.tr or legislation.gov.uk.
 
-Before relying on the figures, open each source linked from the immigration panel and the rate-set provenance, and update the pack's `verified_at` and the rate sets through the rules workflow.
+Before relying on the figures, open each source linked from the Immigration tab and from the rate-set provenance on the Explain tab. In the production design the pack's `verified_at` date and the rate sets are updated through the rules workflow ([ARCHITECTURE.md, section 6](ARCHITECTURE.md#6-data-model-and-database)).
 
 ---
 
@@ -125,9 +128,9 @@ Other figures in the trace: multiple of salary £188,676 / £90,000 = **2.10**; 
 
 ## 8. Independent reviews and the fixes they produced
 
-Two adversarial reviews were run on the finished code before the build was accepted, each by a reviewer that had not written the code and was asked to find wrong figures first and style last.
+Two independent reviews were run on the finished code, each by a reviewer who had not written it and who was asked to look for wrong figures first and style last.
 
-**Engine and guidance review.** Found no wrong figure from the UK tax or National Insurance functions, the breakpoint list or the solver, and re-derived the golden values by hand. It did find fourteen defects, all fixed with regression tests:
+**Engine and guidance review.** Found no wrong figure from the UK tax or National Insurance functions, the breakpoint list or the solver, and re-derived the golden values by hand. It found fourteen defects, all fixed with regression tests:
 
 - the rate-set fingerprint ignored rate-set content and the rates date, so a cache could have served stale results (fingerprint now covers content checksums, and a `cache_key` includes the rates date);
 - a bonus or other equalised item joined the net guarantee with no hypothetical-tax share (a share now applies when the base is all equalised items, and a warning says so when the base is salary only);

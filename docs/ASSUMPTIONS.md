@@ -71,11 +71,13 @@ The immigration panel is guidance, not a decision. It never decides eligibility 
 
 ### How each point is marked
 
-Every requirement, document, cost, stage and note in the guidance pack carries one verification level and at least one GOV.UK source:
+Every requirement, document, cost, stage and note in the guidance pack carries one verification level and at least one GOV.UK source, and the Immigration tab shows the level's label beside the item:
 
-- **search_confirmed**: confirmed from search results quoting the official page; the page itself could not be opened from the build environment.
-- **third_party_reported**: reported by third parties (for example adviser or news summaries); check the official page before relying on it. The 8 April 2026 fee changes (visa application fees, sponsor licence fee, licence priority service, the Certificate of Sponsorship fee for 2026) are in this group, as is the TB test price.
-- **from_knowledge**: from the author's knowledge of the rules; not re-checked for this pack. For example the maintenance funds (£1,270, and £285, £315 and £200 for dependants), the reduced salary thresholds, priority visa service prices and processing durations for individual stages.
+- **Official source** (`official_source`): traced to the wording of the official page; check the linked page before relying on a figure. For example the Immigration Skills Charge, the health surcharge, the salary threshold and English at B2.
+- **Third-party report** (`third_party`): reported by third parties and not yet confirmed on the official page; check it on GOV.UK before relying on the figure. The 8 April 2026 fee changes (visa application fees, sponsor licence fee, licence priority service, the Certificate of Sponsorship fee for 2026) are in this group, as are the licence processing time and the TB test price.
+- **Not re-verified** (`unverified`): stated from general knowledge of the rules; confirm on the official page before relying on it. For example the maintenance funds (£1,270, and £285, £315 and £200 for dependants), the reduced salary thresholds, priority visa service prices and the typical duration of each timeline stage.
+
+[VERIFICATION.md, section 6](VERIFICATION.md#6-facts-not-re-verified-against-the-official-pages) lists every item at each level.
 
 ### Assumptions when a tailoring question is unanswered
 
@@ -130,22 +132,22 @@ The panel works with no answers at all. Each unanswered question uses the value 
 
 ## Reference pack versus current guidance
 
-As found on 7 and 8 October 2026. Where current official guidance differs from the reference pack, the tool follows the guidance and says so. "Search-confirmed" means confirmed from search results quoting the source, because the build environment could not open the pages directly; verify each on the page before relying on it.
+As found on 7 and 8 October 2026. Where current official guidance differs from the reference pack, the tool follows the guidance and says so. Positions traced to the official page are marked "(official source)" and the reported fee changes "(third-party report)"; the two-year total and the hypothetical tax are computed by the tool, and the remaining rows are not re-verified. Check each on the official page before relying on it.
 
 | Topic | Reference pack | Current position | Effect on the tool |
 |---|---|---|---|
-| UK rates and thresholds | "2026/27 rates" | Thresholds and rates frozen to 2030/31, identical to 2025/26 (search-confirmed) | None numerically; the tax year is labelled explicitly |
+| UK rates and thresholds | "2026/27 rates" | Thresholds and rates frozen to 2030/31, identical to 2025/26 (official source) | None numerically; the tax year is labelled explicitly |
 | HS212 edition | Linked as "2026" | The 2026 edition is the one for 2025/26 returns (understanding, not verified) | None numerically |
 | Employee NICs wording | "8% up to £50,270" | 8% between £12,570 and £50,270, 2% above | Computation already correct; label clarified |
 | Two-year total | £369,352 | Sum of unrounded years is £369,351.47; £369,352 is the sum of lines rounded to the pound | Rounding policy stated; the reference pack's convention reproduced |
 | Hypothetical Turkish tax | £30,000 assumed; "tool should work it out" | About £34,200 under 2026 rules at indicative exchange rates | Calculated figure shown beside any override; most material assumption |
-| Turkish social security ceiling | Not stated | Raised to 9 times the minimum wage from 1 January 2026 (search-confirmed) | In the TR_SGK rate set |
+| Turkish social security ceiling | Not stated | Raised to 9 times the minimum wage from 1 January 2026 (official source) | In the TR_SGK rate set |
 | Social security agreement | "May stay in the Turkish scheme; flag it" | Convention exists (1961 Order); conditions are employer, insurance and duration; period limit not verified | Toggle plus Turkish employer line plus certificate assumption |
-| Visa decision time | 3 weeks outside, 8 weeks inside | Same (search-confirmed) | None |
-| English requirement | Not mentioned | B2 for new applications from 8 January 2026 (search-confirmed) | Documents and timeline |
-| Tuberculosis test | Not mentioned | Turkey is on the list; clinics in Istanbul and Ankara (search-confirmed) | Conditional document and timeline stage |
-| Immigration Skills Charge | Not mentioned | £1,320 and £480 a year from 16 December 2025 (search-confirmed) | Cost item with employer payer, cannot be recovered from the worker |
-| Visa and sponsor fees | Not mentioned | Changed on 8 April 2026 (third-party reports) | Cost items with verified_at |
-| Salary requirement | Not mentioned | £41,700 or the going rate, RQF 6, basic pay only (search-confirmed) | Guidance text; no eligibility inference |
+| Visa decision time | 3 weeks outside, 8 weeks inside | Same (official source) | None |
+| English requirement | Not mentioned | B2 for new applications from 8 January 2026 (official source) | Documents and timeline |
+| Tuberculosis test | Not mentioned | Turkey is on the list; clinics in Istanbul and Ankara (official source) | Conditional document and timeline stage |
+| Immigration Skills Charge | Not mentioned | £1,320 and £480 a year from 16 December 2025 (official source) | Cost item with employer payer, cannot be recovered from the worker |
+| Visa and sponsor fees | Not mentioned | Changed on 8 April 2026 (third-party report) | Cost items with verified_at |
+| Salary requirement | Not mentioned | £41,700 or the going rate, RQF 6, basic pay only (official source) | Guidance text; no eligibility inference |
 | Accommodation value | Rent treated as the benefit | Statutory value is the greater of annual value and rent | Assumption `BIK_CASH_EQUIVALENT_AS_INPUT` |
 | Payrolling of benefits | Not mentioned | Mandatory from April 2027, accommodation excluded | Assumption; no cost effect |

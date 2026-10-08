@@ -15,7 +15,7 @@ Rule for the slice: every module in A is the same module in B with infrastructur
 
 Package names: `teq_engine` (the pure calculation engine), `teq_guidance` (the pure immigration guidance package) and `teq_web` (the Django project).
 
-Related documents: [ASSUMPTIONS.md](ASSUMPTIONS.md) (every assumption and warning code), [VERIFICATION.md](VERIFICATION.md) (what is verified and how), [DEMO.md](DEMO.md) (demo script and review questions).
+Related documents: [ASSUMPTIONS.md](ASSUMPTIONS.md) (every assumption and warning code), [VERIFICATION.md](VERIFICATION.md) (what is verified and how), [WALKTHROUGH.md](WALKTHROUGH.md) (a walkthrough of the tool, design questions and answers, and open questions).
 
 ---
 
@@ -122,7 +122,7 @@ Implemented in the `teq_guidance` package (standard library only, no Django, no 
 
 - **Content is data, not code**: a versioned JSON pack per route (`teq_guidance/data/tr_gb_skilled_worker.json`) holds the route note, requirements (general, or circumstance-dependent), documents (general, or conditional with the condition as a predicate on tailoring answers), costs, timeline stages and notes, employer responsibilities, sources, and the reference-pack comparison table. Tailoring questions cover the occupation code, nationality, application location, whether a sponsor licence is held, sponsor size, the number of adult and child dependants, residence in a TB-test country, how English will be shown, whether the sponsor certifies maintenance, the occupation sector, and whether the UK entity will employ the worker or the Turkish employer posts them.
 - **Conditions are data.** A condition is a test such as `{"question": "tb_listed_resident", "equals": true}` or `{"question": "dependants_adults", "gte": 1}` (operators `equals`, `in`, `gte`, `gt`, `lte`), combined with `all` and `any`. An unanswered question uses the pack's stated `assumed_if_unanswered` value, and the panel data lists it under "what we would need to tailor this further" together with the assumption made; the web page names the main assumed answers in the one-line summary above the collapsed tailoring form, and each question shows its assumed answer.
-- **Costs are formulas, not fixed numbers.** Each cost item has `basis`: FIXED, PER_VISA_YEAR (health surcharge), FIRST_YEAR_THEN_PER_6_MONTHS (skills charge), PER_ADULT_DEPENDANT, PER_CHILD_DEPENDANT, PER_DEPENDANT_VISA_YEAR_ADULT, PER_DEPENDANT_VISA_YEAR_CHILD; a `tier` rule where the fee depends on visa length (up to 3 years or longer), application location (outside or inside the UK) or sponsor size; `payer` (EMPLOYER, APPLICANT, EITHER_BY_POLICY); a `cannot_be_recouped_from_worker` flag; `verification` (search_confirmed, third_party_reported, from_knowledge); `source`; `verified_at`. The panel computes the amounts for the scenario's visa length and dependants and shows the formula next to each figure (for example "£1,035 x 2 years"), with subtotals for the employer's mandatory costs, the applicant-side costs an employer may pay by policy, and the applicant's own costs. These totals never enter the employment-cost benchmark. Visa length may be given in months: the skills charge is the first 12 months plus one period for each further six months or part, the health surcharge charges half a year for a final part year of six months or less, and anything over 60 months is priced as one 60-month grant with the panel warning `VISA_LENGTH_EXCEEDS_SINGLE_GRANT`.
+- **Costs are formulas, not fixed numbers.** Each cost item has `basis`: FIXED, PER_VISA_YEAR (health surcharge), FIRST_YEAR_THEN_PER_6_MONTHS (skills charge), PER_ADULT_DEPENDANT, PER_CHILD_DEPENDANT, PER_DEPENDANT_VISA_YEAR_ADULT, PER_DEPENDANT_VISA_YEAR_CHILD; a `tier` rule where the fee depends on visa length (up to 3 years or longer), application location (outside or inside the UK) or sponsor size; `payer` (EMPLOYER, APPLICANT, EITHER_BY_POLICY); a `cannot_be_recouped_from_worker` flag; `verification` (official_source, third_party, unverified); `source`; `verified_at`. The panel computes the amounts for the scenario's visa length and dependants and shows the formula next to each figure (for example "£1,035 x 2 years"), with subtotals for the employer's mandatory costs, the applicant-side costs an employer may pay by policy, and the applicant's own costs. These totals never enter the employment-cost benchmark. Visa length may be given in months: the skills charge is the first 12 months plus one period for each further six months or part, the health surcharge charges half a year for a final part year of six months or less, and anything over 60 months is priced as one 60-month grant with the panel warning `VISA_LENGTH_EXCEEDS_SINGLE_GRANT`.
 - **Timeline is a small dependency graph.** Each stage has `depends_on`, a typical duration range, an actor and a condition (for example "sponsor licence application" only when no licence is held; "TB test" only for residents of a listed country). The panel computes the critical path with forward and backward passes at the minimum and maximum durations and shows the total as a range in days and weeks, never as a date, and marks which stages can run in parallel (English test and TB test alongside the licence application). A stage that does not apply hands its dependencies to the stages after it, so a conditional stage in the middle of a chain never breaks the path.
 - A small decision table maps tailoring answers to which conditional items apply. Nothing infers eligibility from salary; the output states that the occupation code, the going rate and basic-pay-only rules decide it. When the answer is "posted by the Turkish employer" (or not yet decided), the panel notes that a different route (Global Business Mobility, Senior or Specialist Worker) may be the relevant one and that this also bears on the social security position, without deciding either.
 - Every rendered panel shows `verified_at`, each item's verification level and its source links; content older than a configurable age (180 days by default, relative to a date the caller passes in) shows `IMMIGRATION_CONTENT_STALE`.
@@ -376,7 +376,7 @@ Covered above: version numbering (lock plus unique constraint plus `If-Match`), 
 - A route capability matrix that makes "unsupported" a first-class, honest state.
 - Immigration costs carrying `payer` and `cannot_be_recouped_from_worker` with sources and verification levels, computed as formulas, and never entering the employment benchmark.
 
-### Gaps a tax reviewer would raise, handled as assumptions or warnings
+### Gaps a tax specialist would raise, handled as assumptions or warnings
 
 - Employer pension auto-enrolment (3% minimum on qualifying earnings) and the Apprenticeship Levy (0.5% above a £15,000 allowance for large pay bills): `AUTO_ENROLMENT_MAY_APPLY`, `APPRENTICESHIP_LEVY_MAY_APPLY`, driven by tenant settings.
 - NICs are strictly per pay period; the annual basis is an assumption (`ANNUAL_NIC_BASIS`).
@@ -407,14 +407,15 @@ Target repository layout (src layout, one Django project, neutral package names)
 ```
 pyproject.toml                 # setuptools, ruff, mypy, pytest config
 ops/{Dockerfile, compose.yml, entrypoint.sh}
-.github/workflows/ci.yml       # sqlite + postgres matrix
-docs/ARCHITECTURE.md docs/ASSUMPTIONS.md docs/VERIFICATION.md docs/DEMO.md docs/rate-set-sourcing.md docs/adr/
+.github/workflows/ci.yml       # lint, types and tests; production adds a Postgres job
+Makefile CHANGELOG.md
+docs/ARCHITECTURE.md docs/ASSUMPTIONS.md docs/VERIFICATION.md docs/WALKTHROUGH.md docs/rate-set-sourcing.md docs/adr/
 src/teq_engine/                # pure engine package
   money.py types.py treatments.py warnings.py trace.py piecewise.py solver.py periods.py calculator.py reference.py
   ratesets/{schemas.py, provider.py, data/gb/*.yaml, data/tr/*.yaml}
   jurisdictions/gb/{income_tax.py, nic.py, benefits.py}
   jurisdictions/tr/{income_tax.py, social_security.py, stamp_tax.py, hypo.py}
-  routes/{registry.py, tr_gb.py}
+  routes/registry.py
 src/teq_guidance/              # pure immigration guidance package (stdlib only)
   model.py loader.py tailoring.py costs.py timeline.py panel.py formatting.py
   data/tr_gb_skilled_worker.json
@@ -426,37 +427,37 @@ tests/{engine, golden, guidance, api, tenancy, web, postgres}/  tests/golden/*.j
 
 | Production component | Slice status |
 |---|---|
-| Engine: UK income tax, NICs, benefit rules, treatments, segment solver with iteration oracle, whole-year periods, trace, warnings, bundled YAML, reference example | **Must: implemented** with golden, boundary and core property tests |
-| Turkish hypothetical tax, calculated and override | **Must: implemented** (2026 constants, hand-checked test) |
-| Web UI: form with item rows, results in tabs (Tax in the reference pack's order, Immigration, Explain), flags, reference-example link, NIC-coverage toggle, trace drawer, narrative, immigration panel, unsupported-route page | **Must: implemented** (templates; htmx optional) |
-| Immigration content for TR to GB with tailoring questions and verified date | **Must: implemented** as a bundled JSON pack in `teq_guidance`, with cost formulas, the critical-path timeline and tests |
-| Template narrator behind the `Narrator` protocol | **Must: implemented** |
-| `POST /api/v1/estimates`, `GET /routes`, `GET /reference-example`, problem details, `/healthz`, `/selftest/golden`, OpenAPI snapshot | **Should: implemented** (thin layer over the same service; large signal for small effort) |
-| `manage.py estimate --example` | **Should: implemented** (proves engine separation) |
-| `RateSet` and `GuidancePack` models, guarded exclusion-constraint migration, `load_rate_sets`, database provider with bundled fallback | **If time: implemented** without approval UI; otherwise documented with the migration SQL |
-| Tenant, User, Membership, Scenario, ScenarioVersion, CalculationRun models | **Stubbed**: models and migrations with a default tenant, "save estimate" only, no auth |
-| API keys, idempotency, pagination, throttling, share links, audit, triggers, jobs, exports, LLM narrator, OpenTelemetry, calendar-accurate mode, RLS, flags | **Documented only** (interfaces named, ADR stubs) |
+| Engine: UK income tax, NICs, benefit rules, treatments, segment solver with iteration oracle, whole-year periods, trace, warnings, bundled YAML, reference example | **Implemented**, with golden, boundary and property tests |
+| Turkish hypothetical tax, calculated and override | **Implemented** (2026 rate sets, hand-checked test) |
+| Web UI: form with item rows, results in tabs (Tax in the reference pack's order, Immigration, Explain), flags, reference-example link, NIC-coverage toggle, trace drawer, narrative, immigration panel, unsupported-route page | **Implemented** (server-rendered templates, no JavaScript) |
+| Immigration content for TR to GB with tailoring questions and verified date | **Implemented** as a bundled JSON pack in `teq_guidance`, with cost formulas, the critical-path timeline and tests |
+| Template narrator behind the `Narrator` protocol | **Implemented** |
+| `POST /api/v1/estimates`, `GET /routes`, `GET /reference-example`, `GET /warnings`, problem details, `/healthz`, `/readyz`, `/selftest/golden`, OpenAPI schema and docs | **Implemented** (a thin layer over the same service) |
+| `manage.py estimate --example` | **Implemented** (shows the engine is independent of the web layer) |
+| `RateSet` and `GuidancePack` models, guarded exclusion-constraint migration, `load_rate_sets`, database provider with bundled fallback | **Documented only**, with the migration SQL (Appendix D); the slice reads the bundled files |
+| Tenant, User, Membership, Scenario, ScenarioVersion, CalculationRun models | **Documented only**: the slice has no models and no login, and carries each result in its URL |
+| API keys, idempotency, pagination, throttling, share links, audit, triggers, jobs, exports, LLM narrator, OpenTelemetry, calendar-accurate mode, RLS, flags | **Documented only** (interfaces named in this document) |
 
 Slice mechanics chosen so they survive into production: the form POSTs, the view validates, then redirects to a GET results URL carrying the canonical inputs as a compact URL-safe string (bounded to a few kilobytes), so a result is reloadable, shareable and reproducible with no database, and the reference example is simply one such link. The page shows the reference pack's three treatment labels, the trace drawer, the assumptions, the immigration panel with computed costs and the critical-path timeline, and the narrative. Region is ENG only; SCT is refused with the capability message.
 
-Order of deferral if scope must shrink: RateSet models (keep bundled YAML), API and ops endpoints, Scottish sensitivity, side-by-side what-if, Turkish module reduced to override plus documented formula with the gap stated openly. Nothing in the "must" rows is deferred.
+Beyond the table, the slice adds a compare view (`/compare`) that shows the same scenario under UK National Insurance and under the Turkish scheme side by side.
 
 ---
 
 ## 12. Verification (acceptance criteria)
 
-The slice is accepted when every item below holds. [VERIFICATION.md](VERIFICATION.md) records how each is checked and what could not be checked from the build environment.
+Criteria marked Horizon B apply to production only; the rest hold for the slice. [VERIFICATION.md](VERIFICATION.md) records how each is checked and which facts have not been re-verified against the official pages.
 
 - **Golden corpus** in `tests/golden/*.json` (inputs, rate-set labels, engine version, expected figures, trace step count): reference example years 1 and 2 (G £127,762; income tax £57,196; employee NICs £4,566; employer NICs £18,414; Class 1A £4,500; totals £188,676, £180,676, £369,352); relocation £10,000 (£2,000 taxable BIK, £300 Class 1A); home-scheme social security (NICs zero); income inside the taper band; income below the personal allowance; Scotland and other routes refused.
-- **Golden-diff gate**: CI runs the corpus; any numeric difference fails unless the change updates the golden files, bumps the engine version and adds an entry to `docs/engine-changes.md` (checked by a script); `CODEOWNERS` on the engine and golden directories.
+- **Golden-diff gate**: CI runs the corpus; any numeric difference fails unless the change updates the golden files and bumps the engine version (each golden file records the version it was computed with), with an entry in `CHANGELOG.md`. Horizon B adds a script that checks the changelog entry, and `CODEOWNERS` on the engine and golden directories.
 - **Property tests** (hypothesis): on the exact gross, the net equals the guarantee and one penny less gross falls below it; after rounding, net delivered is at or above the guarantee; the relocation cap is consumed once per move across years; G strictly increasing in the target and in the benefit value; segment solve equals bisection and equals the fixed-point oracle to the penny; tax and NIC functions continuous, non-decreasing, marginal below 1; both cost decompositions foot; determinism (same inputs give an identical serialised hash); year-restricted items leave other years unchanged; no float anywhere in the result tree; TRY to GBP round trip within rounding.
 - **Boundary tests** read thresholds from the rate set and test at the value and one penny either side (personal allowance, £50,270, £100,000, £125,140, primary threshold, upper earnings limit, relocation cap, SGK ceiling), zero salary, 1 and 10 years.
 - **Guidance tests**: the pack loads and validates, and validation rejects broken packs; the reference scenario's immigration costs (CoS £525, Immigration Skills Charge £2,640, visa fee £819, health surcharge £2,070; employer-mandatory £3,165, applicant side £2,889); licence and dependant variants; conditional documents; critical-path ranges against an independent path enumeration; no floats in the panel.
 - **Tenancy tests** (Horizon B): parametrised over every scoped endpoint, another tenant's key gets 404; lists never leak; manager without context raises; share links cross tenants correctly.
-- **Contract tests**: committed `openapi.json` snapshot; schemathesis fuzz against the running app; problem-detail shape on every error path; idempotency replay and concurrent duplicate; two-thread version-conflict test (exactly one 201 and one 409).
-- **Postgres-only marker**: exclusion overlap, triggers, GIN queries, RLS.
+- **Contract tests**: problem-detail shape on every error path and the OpenAPI document (slice); committed `openapi.json` snapshot, schemathesis fuzz against the running app, idempotency replay and concurrent duplicate, and a two-thread version-conflict test with exactly one 201 and one 409 (Horizon B).
+- **Postgres-only marker** (Horizon B): exclusion overlap, triggers, GIN queries, RLS.
 - **Catalogue completeness**: every warning and assumption code the engine can emit has template text and a tailoring question.
-- **Manual rehearsal**: fresh clone, install, migrate, run; load the reference link; change housing; flip the NIC toggle; open the immigration panel and the trace; all in under ten minutes.
+- **Manual check**: fresh clone, install, migrate, run; load the reference link; change housing; flip the NIC toggle; open the immigration panel and the trace; all in under ten minutes.
 
 ---
 
@@ -544,7 +545,7 @@ Design notes: each item's `allocations[]` carry a `hypothetical_tax_share` and, 
 
 ## Appendix B. Warning and assumption code catalogue (initial)
 
-The engine's catalogue (`teq_engine.warnings`) holds every code below, plus `UK_RESIDENT_FULL_YEAR`, `UK_NIC_APPLIES`, `RATES_UNCHANGED_LATER_YEARS` (assumptions used by the result schema), the errors `RATES_UNAVAILABLE` and `FX_RATE_IN_FUTURE`, the warning `EQUALISED_ITEM_NO_HYPO_SHARE`, and the guidance panel warning `VISA_LENGTH_EXCEEDS_SINGLE_GRANT`. Plain-English explanations of each are in [ASSUMPTIONS.md](ASSUMPTIONS.md).
+The engine's catalogue (`teq_engine.warnings`) holds every code below, plus `UK_RESIDENT_FULL_YEAR`, `UK_NIC_APPLIES`, `RATES_UNCHANGED_LATER_YEARS` (assumptions used by the result schema), the errors `RATES_UNAVAILABLE` and `FX_RATE_IN_FUTURE`, and the warning `EQUALISED_ITEM_NO_HYPO_SHARE`. The guidance panel's own warning `VISA_LENGTH_EXCEEDS_SINGLE_GRANT` is emitted by `teq_guidance` and is not in the engine catalogue. Plain-English explanations of each are in [ASSUMPTIONS.md](ASSUMPTIONS.md).
 
 | Code | Kind and severity | Meaning | Shown action or tailoring question |
 |---|---|---|---|
@@ -572,7 +573,7 @@ The engine's catalogue (`teq_engine.warnings`) holds every code below, plus `UK_
 | `BIK_CASH_EQUIVALENT_AS_INPUT` | assumption | No accommodation valuation performed | Is the property rented by the employer; any employee contribution? |
 | `EMPLOYMENT_ALLOWANCE_NOT_APPLIED` | assumption | No employer NIC allowance | Tenant eligibility |
 | `OWR_NOT_MODELLED` | assumption | Overseas Workday Relief ignored | Any non-UK workdays expected? |
-| `AUTO_ENROLMENT_MAY_APPLY`, `APPRENTICESHIP_LEVY_MAY_APPLY` | warning | Further employer costs possible | Tenant settings |
+| `AUTO_ENROLMENT_MAY_APPLY`, `APPRENTICESHIP_LEVY_MAY_APPLY` | info | Further employer costs possible | Tenant settings |
 | `HOME_COUNTRY_TAX_RESIDENCE_RISK` | warning | Departure-year residence | Treaty position; calendar-accurate mode |
 | `PAYROLLING_REPORTING_CHANGE_2027` | assumption | Reporting change, not cost | None |
 | `DEGRADED_BUNDLED_RATES`, `PERSISTENCE_UNAVAILABLE` | warning | Database unavailable | Result not saved; retry later |
@@ -645,22 +646,22 @@ Response: `200` with the Appendix A body. Validation failure: `422` problem deta
 
 ## Appendix F. Reference pack versus current guidance (as found on 7 and 8 October 2026)
 
-The reference pack is the assignment brief; where current official guidance differs, the tool follows the guidance and says so. Items marked "search-confirmed" were confirmed from search results quoting the source, because the build environment could not open the pages directly; verify each on the page before relying on it. The same table is held in the guidance pack (`pack_vs_current_guidance`) and shown in the immigration panel.
+The reference pack is the assignment brief; where current official guidance differs, the tool follows the guidance and says so. Positions traced to the official page are marked "(official source)" and the reported fee changes "(third-party report)"; the two-year total and the hypothetical tax are computed by the tool, and the remaining rows are not re-verified. Check each on the official page before relying on it. The same table, with each row's verification level, is held in the guidance pack (`pack_vs_current_guidance`) and returned with the immigration panel by the API.
 
 | Topic | Reference pack | Current position | Effect on the tool |
 |---|---|---|---|
-| UK rates and thresholds | "2026/27 rates" | Thresholds and rates frozen to 2030/31, identical to 2025/26 (search-confirmed) | None numerically; the tax year is labelled explicitly |
+| UK rates and thresholds | "2026/27 rates" | Thresholds and rates frozen to 2030/31, identical to 2025/26 (official source) | None numerically; the tax year is labelled explicitly |
 | HS212 edition | Linked as "2026" | The 2026 edition is the one for 2025/26 returns (understanding, not verified) | None numerically |
 | Employee NICs wording | "8% up to £50,270" | 8% between £12,570 and £50,270, 2% above | Computation already correct; label clarified |
 | Two-year total | £369,352 | Sum of unrounded years is £369,351.47; £369,352 is the sum of lines rounded to the pound | Rounding policy stated; the reference pack's convention reproduced |
 | Hypothetical Turkish tax | £30,000 assumed; "tool should work it out" | About £34,200 under 2026 rules at indicative exchange rates | Calculated figure shown beside any override; most material assumption |
-| Turkish social security ceiling | Not stated | Raised to 9 times the minimum wage from 1 January 2026 (search-confirmed) | In the TR_SGK rate set |
+| Turkish social security ceiling | Not stated | Raised to 9 times the minimum wage from 1 January 2026 (official source) | In the TR_SGK rate set |
 | Social security agreement | "May stay in the Turkish scheme; flag it" | Convention exists (1961 Order); conditions are employer, insurance and duration; period limit not verified | Toggle plus Turkish employer line plus certificate assumption |
-| Visa decision time | 3 weeks outside, 8 weeks inside | Same | None |
-| English requirement | Not mentioned | B2 for new applications from 8 January 2026 (search-confirmed) | Documents and timeline |
-| Tuberculosis test | Not mentioned | Turkey is on the list; clinics in Istanbul and Ankara (search-confirmed) | Conditional document and timeline stage |
-| Immigration Skills Charge | Not mentioned | £1,320 and £480 a year from 16 December 2025 (search-confirmed) | Cost item with employer payer, cannot be recovered from the worker |
-| Visa and sponsor fees | Not mentioned | Changed on 8 April 2026 (third-party reports) | Cost items with verified_at |
-| Salary requirement | Not mentioned | £41,700 or the going rate, RQF 6, basic pay only (search-confirmed) | Guidance text; no eligibility inference |
+| Visa decision time | 3 weeks outside, 8 weeks inside | Same (official source) | None |
+| English requirement | Not mentioned | B2 for new applications from 8 January 2026 (official source) | Documents and timeline |
+| Tuberculosis test | Not mentioned | Turkey is on the list; clinics in Istanbul and Ankara (official source) | Conditional document and timeline stage |
+| Immigration Skills Charge | Not mentioned | £1,320 and £480 a year from 16 December 2025 (official source) | Cost item with employer payer, cannot be recovered from the worker |
+| Visa and sponsor fees | Not mentioned | Changed on 8 April 2026 (third-party report) | Cost items with verified_at |
+| Salary requirement | Not mentioned | £41,700 or the going rate, RQF 6, basic pay only (official source) | Guidance text; no eligibility inference |
 | Accommodation value | Rent treated as the benefit | Statutory value is the greater of annual value and rent | Assumption `BIK_CASH_EQUIVALENT_AS_INPUT` |
 | Payrolling of benefits | Not mentioned | Mandatory from April 2027, accommodation excluded | Assumption; no cost effect |

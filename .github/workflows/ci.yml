@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev,web]"
+
+      - name: Lint
+        run: ruff check src tests
+
+      - name: Formatting
+        run: ruff format --check src tests
+
+      - name: Types
+        run: mypy src/teq_engine src/teq_guidance src/teq_web
+
+      - name: Tests
+        run: pytest -q
