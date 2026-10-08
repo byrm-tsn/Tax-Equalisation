@@ -1,0 +1,64 @@
+{
+  "name": "below_personal_allowance",
+  "description": "Salary 10,000 with hypothetical tax 500: the net target 9,500 is below the personal allowance and the primary threshold, so gross equals net; employer NICs apply above the 5,000 secondary threshold.",
+  "engine_version": "0.1.0",
+  "rates_as_of": "2026-10-08",
+  "inputs": {
+    "route": {
+      "home": "TR",
+      "host": "GB",
+      "region": "ENG"
+    },
+    "assignment": {
+      "length_years": 1
+    },
+    "salary": {
+      "amount": "10000.00",
+      "currency": "GBP",
+      "frequency": "ANNUAL"
+    },
+    "hypothetical_tax": {
+      "method": "OVERRIDE",
+      "override": "500.00"
+    },
+    "items": [],
+    "assumptions": {
+      "uk_resident": true,
+      "social_security": "UK_NIC",
+      "owr_claimed": false
+    }
+  },
+  "expected": {
+    "years": [
+      {
+        "assignment_year": 1,
+        "gross_exact": "9500.00",
+        "gross_rounded": "9500",
+        "net_delivered_exact": "9500.00",
+        "segment": "IT 0% + NIC 0%",
+        "marginal_rate": "0",
+        "lines": {
+          "GROSS_CASH": "9500",
+          "TAXABLE_PAY": "9500",
+          "PERSONAL_ALLOWANCE": "12570",
+          "INCOME_TAX": "0",
+          "EMPLOYEE_NIC": "0",
+          "NET_CASH": "9500",
+          "EMPLOYER_NIC": "675",
+          "CLASS_1A": "0",
+          "BENEFIT_COST": "0",
+          "EXEMPT_COST": "0",
+          "TOTAL_EMPLOYER_COST": "10175",
+          "MULTIPLE_OF_SALARY": "1.02",
+          "MARGINAL_COST_PER_NET_POUND": "1.15"
+        }
+      }
+    ],
+    "totals": {
+      "total_employer_cost": "10175"
+    },
+    "warnings_exclude": [
+      "PERSONAL_ALLOWANCE_TAPER_BAND"
+    ]
+  }
+}

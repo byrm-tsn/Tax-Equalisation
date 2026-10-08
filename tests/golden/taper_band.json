@@ -1,0 +1,71 @@
+{
+  "name": "taper_band",
+  "description": "Salary 100,000 with hypothetical tax 28,000 and no items: net target 72,000 puts total income inside the personal allowance taper band (60% income tax + 2% NICs, slope 0.38).",
+  "engine_version": "0.1.0",
+  "rates_as_of": "2026-10-08",
+  "inputs": {
+    "route": {
+      "home": "TR",
+      "host": "GB",
+      "region": "ENG"
+    },
+    "assignment": {
+      "length_years": 1
+    },
+    "salary": {
+      "amount": "100000.00",
+      "currency": "GBP",
+      "frequency": "ANNUAL"
+    },
+    "hypothetical_tax": {
+      "method": "OVERRIDE",
+      "override": "28000.00"
+    },
+    "items": [],
+    "assumptions": {
+      "uk_resident": true,
+      "social_security": "UK_NIC",
+      "owr_claimed": false
+    }
+  },
+  "expected": {
+    "years": [
+      {
+        "assignment_year": 1,
+        "gross_exact": "109059.47",
+        "gross_rounded": "109060",
+        "net_delivered_exact": "72000.20",
+        "segment": "IT 60% (allowance taper) + NIC 2%",
+        "marginal_rate": "0.62",
+        "lines": {
+          "GROSS_CASH": "109060",
+          "TAXABLE_PAY": "109060",
+          "PERSONAL_ALLOWANCE": "8040",
+          "INCOME_TAX": "32868",
+          "EMPLOYEE_NIC": "4192",
+          "NET_CASH": "72000",
+          "EMPLOYER_NIC": "15609",
+          "CLASS_1A": "0",
+          "BENEFIT_COST": "0",
+          "EXEMPT_COST": "0",
+          "TOTAL_EMPLOYER_COST": "124669",
+          "MULTIPLE_OF_SALARY": "1.25",
+          "MARGINAL_COST_PER_NET_POUND": "3.03"
+        }
+      }
+    ],
+    "totals": {
+      "total_employer_cost": "124669"
+    },
+    "warnings_include": [
+      "PERSONAL_ALLOWANCE_TAPER_BAND"
+    ],
+    "warnings_exclude": [
+      "RATES_NOT_PUBLISHED_FOR_YEAR"
+    ],
+    "assumptions_exclude": [
+      "RATES_UNCHANGED_LATER_YEARS",
+      "RELOCATION_QUALIFYING_ASSUMED"
+    ]
+  }
+}

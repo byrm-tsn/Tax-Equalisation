@@ -1,0 +1,20 @@
+# UK benefit rules used by the engine, tax year 2026-27.
+schema_version: 1
+jurisdiction: UK
+category: UK_BENEFIT_RULES
+label: "2026-27"
+version: 1
+effective_from: "2026-04-06"
+effective_to: "2027-04-05"
+sources:
+  - url: https://www.gov.uk/expenses-and-benefits-relocation
+    verified_at: "2026-10-08"
+    note: >-
+      Qualifying relocation expenses and benefits are exempt up to 8,000 per move,
+      provided by the end of the tax year following the tax year the job starts.
+data:
+  relocation:
+    exemption_cap: "8000"
+    cap_scope: PER_MOVE
+    window: "start tax year plus the following tax year"
+    window_tax_years: 2

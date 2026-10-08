@@ -1,0 +1,138 @@
+{
+  "name": "calculated_hypothetical_tax",
+  "description": "Reference example with the Turkish hypothetical tax calculated under 2026 rules at 65.7 TRY per GBP: gross 5,913,000 TRY; SGK 535,086.00; income tax 1,728,665.60 less the minimum-wage credit 57,881.20 = 1,670,784.40; stamp tax 41,871.30; total 2,247,741.70 TRY = 34,212.20 GBP.",
+  "engine_version": "0.1.0",
+  "rates_as_of": "2026-10-08",
+  "inputs": {
+    "route": {
+      "home": "TR",
+      "host": "GB",
+      "region": "ENG"
+    },
+    "assignment": {
+      "length_years": 2,
+      "period_mode": "ILLUSTRATIVE_WHOLE_YEAR"
+    },
+    "salary": {
+      "amount": "90000.00",
+      "currency": "GBP",
+      "frequency": "ANNUAL"
+    },
+    "hypothetical_tax": {
+      "method": "CALCULATED",
+      "includes_social_security": true,
+      "base": "SALARY_ONLY"
+    },
+    "items": [
+      {
+        "id": "cola",
+        "kind": "COLA",
+        "label": "Cost-of-living allowance",
+        "amount": "6000.00",
+        "currency": "GBP",
+        "frequency": "ANNUAL",
+        "years": "ALL"
+      },
+      {
+        "id": "housing",
+        "kind": "HOUSING",
+        "label": "Housing (rent paid by the employer)",
+        "amount": "30000.00",
+        "currency": "GBP",
+        "frequency": "ANNUAL",
+        "years": "ALL"
+      },
+      {
+        "id": "relocation",
+        "kind": "RELOCATION",
+        "label": "Relocation",
+        "amount": "8000.00",
+        "currency": "GBP",
+        "frequency": "ONE_OFF",
+        "years": [
+          1
+        ]
+      }
+    ],
+    "assumptions": {
+      "uk_resident": true,
+      "social_security": "UK_NIC",
+      "owr_claimed": false
+    },
+    "fx": {
+      "pair": "GBPTRY",
+      "rate": "65.7",
+      "as_of": "2026-10-08",
+      "source": "indicative rate for the review"
+    }
+  },
+  "expected": {
+    "hypothetical_tax": {
+      "mode": "CALCULATED",
+      "amount": "34212.20",
+      "components": {
+        "gross_try": "5913000.00",
+        "monthly_gross_try": "492750.00",
+        "sgk_base_monthly_try": "297270.00",
+        "sgk_ceiling_applied": true,
+        "sgk_try": "535086.00",
+        "income_tax_base_try": "5377914.00",
+        "income_tax_before_exemption_try": "1728665.60",
+        "minimum_wage_exemption_try": "57881.20",
+        "income_tax_try": "1670784.40",
+        "stamp_tax_base_try": "5516640.00",
+        "stamp_tax_try": "41871.30",
+        "total_try": "2247741.70",
+        "total_gbp": "34212.20"
+      }
+    },
+    "net_guarantee": {
+      "salary": "90000.00",
+      "hypothetical_tax": "34212.20",
+      "net_salary": "55787.80",
+      "net_allowances": "6000.00",
+      "net_cash_target": "61787.80"
+    },
+    "years": [
+      {
+        "assignment_year": 1,
+        "gross_exact": "119813.96",
+        "gross_rounded": "119814",
+        "net_delivered_exact": "61787.82",
+        "segment": "IT 45% + NIC 2%",
+        "lines": {
+          "GROSS_CASH": "119814",
+          "TAXABLE_PAY": "149814",
+          "PERSONAL_ALLOWANCE": "0",
+          "INCOME_TAX": "53619",
+          "EMPLOYEE_NIC": "4407",
+          "NET_CASH": "61788",
+          "EMPLOYER_NIC": "17222",
+          "CLASS_1A": "4500",
+          "BENEFIT_COST": "30000",
+          "EXEMPT_COST": "8000",
+          "TOTAL_EMPLOYER_COST": "179536",
+          "MULTIPLE_OF_SALARY": "1.99",
+          "MARGINAL_COST_PER_NET_POUND": "2.17"
+        }
+      },
+      {
+        "assignment_year": 2,
+        "lines": {
+          "GROSS_CASH": "119814",
+          "EXEMPT_COST": "0",
+          "TOTAL_EMPLOYER_COST": "171536"
+        }
+      }
+    ],
+    "totals": {
+      "total_employer_cost": "351072"
+    },
+    "warnings_include": [
+      "FX_RATE_USER_SUPPLIED"
+    ],
+    "assumptions_exclude": [
+      "HYPO_TAX_OVERRIDE"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+# UK income tax, England (and Northern Ireland) rates, tax year 2026-27.
+# Thresholds are frozen and identical to 2025-26.
+schema_version: 1
+jurisdiction: UK-ENG
+category: UK_INCOME_TAX
+label: "2026-27"
+version: 1
+effective_from: "2026-04-06"
+effective_to: "2027-04-05"
+sources:
+  - url: https://www.gov.uk/guidance/rates-and-thresholds-for-employers-2026-to-2027
+    verified_at: "2026-10-08"
+    note: >-
+      Personal allowance 12,570; basic rate 20% on taxable income up to 37,700; higher
+      rate 40% up to 125,140; additional rate 45% above. The allowance is reduced by 1
+      for every 2 of adjusted net income over 100,000.
+data:
+  personal_allowance: "12570"
+  taper_start: "100000"
+  taper_rate: "0.5"
+  bands:
+    - {upto: "37700", rate: "0.20"}
+    - {upto: "125140", rate: "0.40"}
+    - {upto: null, rate: "0.45"}

@@ -1,0 +1,77 @@
+{
+  "name": "unsupported_region_sct",
+  "description": "Route TR to GB region SCT is refused with a typed error naming the supported routes.",
+  "engine_version": "0.1.0",
+  "rates_as_of": "2026-10-08",
+  "inputs": {
+    "route": {
+      "home": "TR",
+      "host": "GB",
+      "region": "SCT"
+    },
+    "assignment": {
+      "length_years": 2,
+      "period_mode": "ILLUSTRATIVE_WHOLE_YEAR"
+    },
+    "salary": {
+      "amount": "90000.00",
+      "currency": "GBP",
+      "frequency": "ANNUAL"
+    },
+    "hypothetical_tax": {
+      "method": "OVERRIDE",
+      "override": "30000.00",
+      "includes_social_security": true,
+      "base": "SALARY_ONLY"
+    },
+    "items": [
+      {
+        "id": "cola",
+        "kind": "COLA",
+        "label": "Cost-of-living allowance",
+        "amount": "6000.00",
+        "currency": "GBP",
+        "frequency": "ANNUAL",
+        "years": "ALL"
+      },
+      {
+        "id": "housing",
+        "kind": "HOUSING",
+        "label": "Housing (rent paid by the employer)",
+        "amount": "30000.00",
+        "currency": "GBP",
+        "frequency": "ANNUAL",
+        "years": "ALL"
+      },
+      {
+        "id": "relocation",
+        "kind": "RELOCATION",
+        "label": "Relocation",
+        "amount": "8000.00",
+        "currency": "GBP",
+        "frequency": "ONE_OFF",
+        "years": [
+          1
+        ]
+      }
+    ],
+    "assumptions": {
+      "uk_resident": true,
+      "social_security": "UK_NIC",
+      "owr_claimed": false
+    }
+  },
+  "expected_error": {
+    "type": "UnsupportedRegionError",
+    "code": "REGION_NOT_SUPPORTED",
+    "supported_routes": [
+      {
+        "home": "TR",
+        "host": "GB",
+        "regions": [
+          "ENG"
+        ]
+      }
+    ]
+  }
+}

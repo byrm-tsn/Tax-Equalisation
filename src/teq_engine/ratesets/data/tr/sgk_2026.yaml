@@ -1,0 +1,33 @@
+# Turkish social security (SGK), calendar year 2026.
+schema_version: 1
+jurisdiction: TR
+category: TR_SGK
+label: "2026"
+version: 1
+effective_from: "2026-01-01"
+effective_to: "2026-12-31"
+sources:
+  - url: https://www.sgk.gov.tr/
+    verified_at: "2026-10-08"
+    note: >-
+      Gross minimum wage 33,030 a month from 1 January 2026. Earnings ceiling raised to
+      9 times the minimum wage (297,270 a month) from 1 January 2026 under Law 7566.
+      Employee: 14% insurance plus 1% unemployment. Employer: 12% disability, old age and
+      death; 2% short-term; 7.5% health; 2% unemployment; less the 2-point incentive for
+      non-manufacturing employers. The FX sanity band is an engine check, not a legal
+      figure.
+data:
+  minimum_wage_gross_monthly: "33030"
+  ceiling_monthly: "297270"
+  ceiling_multiple_of_minimum_wage: "9"
+  employee:
+    insurance: "0.14"
+    unemployment: "0.01"
+  employer:
+    disability_old_age_death: "0.12"
+    short_term: "0.02"
+    health: "0.075"
+    unemployment: "0.02"
+  incentive_points_default: "2"
+  fx_sanity_band:
+    GBPTRY: {low: "20", high: "200"}

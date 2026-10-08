@@ -1,0 +1,25 @@
+# Turkish income tax on wage income, calendar year 2026.
+schema_version: 1
+jurisdiction: TR
+category: TR_INCOME_TAX
+label: "2026"
+version: 1
+effective_from: "2026-01-01"
+effective_to: "2026-12-31"
+sources:
+  - url: https://www.gib.gov.tr/
+    verified_at: "2026-10-08"
+    note: >-
+      Revenue Administration (GIB). 2026 wage-income brackets from the income tax
+      communique published in the Official Gazette of 31 December 2025: 15% up to
+      190,000; 20% up to 400,000; 27% up to 1,500,000; 35% up to 5,300,000; 40% above.
+      Wage income up to the minimum wage is exempt (applied as a credit equal to the tax
+      on the minimum-wage base).
+data:
+  wage_brackets:
+    - {upto: "190000", rate: "0.15"}
+    - {upto: "400000", rate: "0.20"}
+    - {upto: "1500000", rate: "0.27"}
+    - {upto: "5300000", rate: "0.35"}
+    - {upto: null, rate: "0.40"}
+  minimum_wage_exemption: true

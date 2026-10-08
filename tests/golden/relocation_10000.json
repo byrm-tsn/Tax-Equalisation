@@ -1,0 +1,124 @@
+{
+  "name": "relocation_10000",
+  "description": "Reference example with relocation of 10,000: 8,000 exempt, the 2,000 excess becomes a taxable benefit with Class 1A of 300.",
+  "engine_version": "0.1.0",
+  "rates_as_of": "2026-10-08",
+  "inputs": {
+    "route": {
+      "home": "TR",
+      "host": "GB",
+      "region": "ENG"
+    },
+    "assignment": {
+      "length_years": 2,
+      "period_mode": "ILLUSTRATIVE_WHOLE_YEAR"
+    },
+    "salary": {
+      "amount": "90000.00",
+      "currency": "GBP",
+      "frequency": "ANNUAL"
+    },
+    "hypothetical_tax": {
+      "method": "OVERRIDE",
+      "override": "30000.00",
+      "includes_social_security": true,
+      "base": "SALARY_ONLY"
+    },
+    "items": [
+      {
+        "id": "cola",
+        "kind": "COLA",
+        "label": "Cost-of-living allowance",
+        "amount": "6000.00",
+        "currency": "GBP",
+        "frequency": "ANNUAL",
+        "years": "ALL"
+      },
+      {
+        "id": "housing",
+        "kind": "HOUSING",
+        "label": "Housing (rent paid by the employer)",
+        "amount": "30000.00",
+        "currency": "GBP",
+        "frequency": "ANNUAL",
+        "years": "ALL"
+      },
+      {
+        "id": "relocation",
+        "kind": "RELOCATION",
+        "label": "Relocation",
+        "amount": "10000.00",
+        "currency": "GBP",
+        "frequency": "ONE_OFF",
+        "years": [
+          1
+        ]
+      }
+    ],
+    "assumptions": {
+      "uk_resident": true,
+      "social_security": "UK_NIC",
+      "owr_claimed": false
+    }
+  },
+  "expected": {
+    "items": {
+      "relocation": {
+        "cap": "8000.00",
+        "exempt": "8000.00",
+        "excess": "2000.00"
+      }
+    },
+    "years": [
+      {
+        "assignment_year": 1,
+        "gross_exact": "129459.62",
+        "gross_rounded": "129460",
+        "net_delivered_exact": "66000.20",
+        "segment": "IT 45% + NIC 2%",
+        "lines": {
+          "GROSS_CASH": "129460",
+          "TAXABLE_PAY": "161460",
+          "PERSONAL_ALLOWANCE": "0",
+          "INCOME_TAX": "58860",
+          "EMPLOYEE_NIC": "4600",
+          "NET_CASH": "66000",
+          "EMPLOYER_NIC": "18669",
+          "CLASS_1A": "4800",
+          "BENEFIT_COST": "32000",
+          "EXEMPT_COST": "8000",
+          "TOTAL_EMPLOYER_COST": "192929",
+          "MULTIPLE_OF_SALARY": "2.14",
+          "MARGINAL_COST_PER_NET_POUND": "2.17"
+        }
+      },
+      {
+        "assignment_year": 2,
+        "lines": {
+          "GROSS_CASH": "127762",
+          "TAXABLE_PAY": "157762",
+          "PERSONAL_ALLOWANCE": "0",
+          "INCOME_TAX": "57196",
+          "EMPLOYEE_NIC": "4566",
+          "NET_CASH": "66000",
+          "EMPLOYER_NIC": "18414",
+          "CLASS_1A": "4500",
+          "BENEFIT_COST": "30000",
+          "EXEMPT_COST": "0",
+          "TOTAL_EMPLOYER_COST": "180676",
+          "MULTIPLE_OF_SALARY": "2.01",
+          "MARGINAL_COST_PER_NET_POUND": "2.17"
+        }
+      }
+    ],
+    "totals": {
+      "total_employer_cost": "373605"
+    },
+    "warnings_include": [
+      "RELOCATION_EXCESS_TAXABLE"
+    ],
+    "assumptions_include": [
+      "RELOCATION_QUALIFYING_ASSUMED"
+    ]
+  }
+}

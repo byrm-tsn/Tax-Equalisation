@@ -1,0 +1,16 @@
+# Turkish stamp tax on wages, calendar year 2026.
+schema_version: 1
+jurisdiction: TR
+category: TR_STAMP
+label: "2026"
+version: 1
+effective_from: "2026-01-01"
+effective_to: "2026-12-31"
+sources:
+  - url: https://www.gib.gov.tr/
+    verified_at: "2026-10-08"
+    note: >-
+      Stamp tax on wage payments at 0.759%; the minimum-wage portion is exempt.
+data:
+  rate: "0.00759"
+  minimum_wage_exempt: true

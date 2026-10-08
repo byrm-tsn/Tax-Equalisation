@@ -1,0 +1,26 @@
+# UK National Insurance, tax year 2026-27 (UK-wide), annual basis.
+schema_version: 1
+jurisdiction: UK
+category: UK_NIC
+label: "2026-27"
+version: 1
+effective_from: "2026-04-06"
+effective_to: "2027-04-05"
+sources:
+  - url: https://www.gov.uk/guidance/rates-and-thresholds-for-employers-2026-to-2027
+    verified_at: "2026-10-08"
+    note: >-
+      Class 1 employee: 8% between the primary threshold (12,570) and the upper earnings
+      limit (50,270), 2% above. Class 1 employer: 15% above the secondary threshold
+      (5,000). Class 1A on benefits in kind: 15%.
+data:
+  employee:
+    primary_threshold: "12570"
+    upper_earnings_limit: "50270"
+    main_rate: "0.08"
+    upper_rate: "0.02"
+  employer:
+    secondary_threshold: "5000"
+    rate: "0.15"
+  class_1a:
+    rate: "0.15"
