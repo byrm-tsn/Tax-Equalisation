@@ -26,6 +26,7 @@ Everything here is an illustration, not tax or immigration advice.
 | `RELOCATION_QUALIFYING_ASSUMED` | assumption | All relocation items are assumed to be qualifying removal expenses and benefits, provided within the time limit, so they are exempt up to the cap. | Are all items on HMRC's qualifying list and paid within the time limit? |
 | `RELOCATION_EXCESS_TAXABLE` | warning | Relocation costs exceed the £8,000 exemption, which applies once per move and is used up across all years. The excess is a taxable benefit, with employer Class 1A National Insurance. | Can the package stay within the cap, or is the excess intended? |
 | `RELOCATION_OUTSIDE_WINDOW` | warning | Relocation paid in assignment year 3 or later falls outside the exemption window (the tax year of the job start and the following tax year), so it is treated as taxable. | When does the job start? The window depends on the actual start date. |
+| `EQUALISED_ITEM_NO_HYPO_SHARE` | warning | A bonus or other equalised item joins the net guarantee in full because the hypothetical-tax base is salary only, so the employer bears all UK tax on it. | Should the hypothetical tax base include all equalised items? |
 | `HYPO_TAX_OVERRIDE` | assumption | The hypothetical home (Turkish) tax was supplied as a figure (the reference pack's £30,000), not calculated. This is the single most material assumption: under 2026 Turkish rules the calculated figure is about £34,200 at indicative exchange rates. | Should the hypothetical tax be calculated from the 2026 rules instead? Which base does the employer's policy use? |
 | `OWR_NOT_MODELLED` | assumption | Overseas Workday Relief, which can exempt pay for workdays outside the UK under the four-year regime (subject to a cap), is not modelled. | Are any non-UK workdays expected? |
 | `HOME_COUNTRY_TAX_RESIDENCE_RISK` | warning | The employee may remain Turkish tax resident in the year they leave, which can create home-country tax that equalisation must cover. | What are the departure date and the treaty position? Calendar-accurate mode would model this. |
@@ -66,6 +67,7 @@ The immigration panel is guidance, not a decision. It never decides eligibility 
 | Code | Kind | What it means | What to check |
 |---|---|---|---|
 | `IMMIGRATION_CONTENT_STALE` | warning | The guidance was last verified more than 180 days (configurable) before the date the panel is shown. Fees usually change each April. | Re-verify fees and timings before relying on them. |
+| `VISA_LENGTH_EXCEEDS_SINGLE_GRANT` | warning (guidance panel) | A visa longer than 5 years was requested; a single Skilled Worker grant lasts at most 5 years, so costs are priced for one 60-month grant and a further application would be needed. | Is a shorter assignment or an extension planned? |
 
 ### How each point is marked
 
@@ -81,7 +83,7 @@ The panel works with no answers at all. Each unanswered question uses the value 
 
 | Question | Assumed if unanswered | Effect if different |
 |---|---|---|
-| Visa length | 2 years (the reference assignment) | The health surcharge and the Immigration Skills Charge scale per year; the application fee is higher above 3 years; a single grant lasts up to 5 years. |
+| Visa length | 2 years (the reference assignment) | The health surcharge and the Immigration Skills Charge scale per year; the application fee is higher above 3 years; a single grant lasts up to 5 years, so anything longer is priced as one 5-year grant with a warning. The length may be given in months, in which case part years are priced: the skills charge per further six months or part, the health surcharge at half a year for a final part year of six months or less. |
 | Where the application is made | Outside the UK | Inside the UK: a different fee and a decision in up to 8 weeks rather than 3. |
 | Sponsor licence held | Yes | No: a licence fee of £1,682 (medium or large) or £611 (small or charitable) and about 6 to 10 weeks, usually the longest stage. |
 | Sponsor size | Medium or large | Small or charitable: lower licence fee and Immigration Skills Charge (£480 a year rather than £1,320). |
@@ -118,6 +120,7 @@ The panel works with no answers at all. Each unanswered question uses the value 
 | `FX_RATE_USER_SUPPLIED` | info | The exchange rate used, its date and its source are pinned to the result, so it can be reproduced later. | Is this the rate to use? |
 | `FX_RATE_STALE` | warning | The exchange rate is more than 30 days older than the rates date. | Enter a current rate. |
 | `FX_RATE_IMPLAUSIBLE` | warning | The exchange rate is outside the plausible band for the pair. | Was it entered the right way round (lira per pound)? |
+| `FX_RATE_IN_FUTURE` | error | The exchange-rate snapshot is dated after the rates date, so it cannot have been the rate in force; the scenario is refused. | Enter a rate dated on or before the rates date. |
 | `SALARY_CONVERTED_AT_SNAPSHOT_FX` | info | A salary entered in lira was converted to pounds at the pinned rate for the net guarantee and the UK gross-up; the Turkish hypothetical tax uses the lira figure directly. | Is this the rate the net guarantee should use? |
 | `DEGRADED_BUNDLED_RATES` | warning | The rates database was unavailable, so the rate tables bundled with the engine were used (production). | Retry later if the result must be saved. |
 | `PERSISTENCE_UNAVAILABLE` | warning | The result could not be saved because the database was unavailable (production). | Retry later. |
