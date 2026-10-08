@@ -1,0 +1,8 @@
+{# The result tabs as plain links (no script): Inputs, Tax, Immigration, Explain. Expects: tabs. #}
+<nav class="tabs no-print" aria-label="Views of this result">
+  <ul>
+    {% for item in tabs %}
+      <li><a href="{{ item.url }}"{% if item.current %} aria-current="page"{% endif %}>{{ item.label }}</a></li>
+    {% endfor %}
+  </ul>
+</nav>

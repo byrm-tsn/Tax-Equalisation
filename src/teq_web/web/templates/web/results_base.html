@@ -1,0 +1,20 @@
+{% extends "web/base.html" %}
+{% load teq %}
+{# The frame every result tab shares: heading, route in words, notices, tab bar, links. #}
+{% block content %}
+<h1>{% block heading %}Employer cost of the assignment{% endblock %}</h1>
+<p class="lead">{{ route_words }}. All amounts in pounds.</p>
+{% for notice in notices %}<p class="flag flag--info notice"><span class="badge badge--info">info</span> {{ notice }}</p>{% endfor %}
+{% include "web/_tabs.html" %}
+
+{% block tab %}{% endblock %}
+
+<p id="disclaimer" class="disclaimer">An illustration, not tax or immigration advice. Check the figures with a tax adviser and the immigration steps on GOV.UK before relying on them.</p>
+
+<div class="links">
+  <a class="button secondary" href="{{ edit_url }}">Edit these inputs</a>
+  <a class="button secondary" href="{{ compare_url }}">Compare UK National Insurance with the Turkish scheme</a>
+  <a class="button secondary" href="{{ api_url }}">This result in the API (JSON)</a>
+  <a class="button secondary" href="{% url 'example' %}">Reference example</a>
+</div>
+{% endblock %}

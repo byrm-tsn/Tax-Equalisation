@@ -228,3 +228,114 @@ def test_the_number_check_catches_an_invented_figure(reference_result) -> None:
     assert unknown_numbers(["The cost is £123,456.78."], reference_result) == {Decimal("123456.78")}
     assert numbers_in("47% of £1,000") == {Decimal("0.47"), Decimal("1000")}
     assert Decimal("0.47") in figure_set(reference_result)
+
+
+# --------------------------------------------------------------------------- immigration
+
+
+def _panel(**answers: object) -> dict[str, Any]:
+    import dataclasses
+    from datetime import date
+
+    from teq_guidance import TailoringAnswers, build_panel
+
+    tailored = dataclasses.replace(TailoringAnswers.reference_example(), **answers)  # type: ignore[arg-type]
+    return build_panel(tailored, as_of=date(2026, 10, 8))
+
+
+PANELS = {
+    "reference": {},
+    "no_licence_with_family": {
+        "sponsor_licence_held": False,
+        "dependants_adults": 1,
+        "dependants_children": 2,
+    },
+    "inside_uk_long_visa": {
+        "application_location": "inside_uk",
+        "visa_length_years": 4,
+        "tb_listed_resident": False,
+        "english_evidence": "degree_taught_in_english",
+        "sponsor_certifies_maintenance": True,
+        "dependants_children": 1,
+    },
+    "small_sponsor_partner": {"sponsor_size": "small_or_charitable", "dependants_adults": 1},
+    "six_year_visa": {"visa_length_years": 6},
+}
+
+
+def test_the_gross_up_sentence_describes_the_packs_iteration(reference_result) -> None:
+    text = " ".join(TemplateNarrator().narrate(reference_result))
+    assert "trial and error" not in text
+    assert (
+        "the tool finds that figure exactly and checks it against the step-by-step "
+        "iteration the reference pack describes."
+    ) in text
+
+
+def test_the_immigration_narrative_puts_the_employer_first() -> None:
+    paragraphs = TemplateNarrator().narrate_immigration(_panel())
+    assert len(paragraphs) == 4
+    employer, application, costs, family = paragraphs
+    assert employer.startswith("The employer moves first. It already holds a sponsor licence")
+    assert "Certificate of Sponsorship" in employer
+    assert "eligible occupation at RQF level 6 (graduate level)" in employer
+    assert "at least £41,700 a year or the occupation's going rate" in employer
+    assert "applies online from outside the UK" in application
+    assert "the Secure English Language Test result at B2, the TB test certificate" in application
+    assert "typically takes 15 to 21 days" in application
+    assert "about 6 to 16 weeks (43 to 112 days)" in application
+    assert costs.startswith(
+        "The employer must pay £3,165 itself: the Certificate of Sponsorship fee of £525 "
+        "and the Immigration Skills Charge of £2,640."
+    )
+    assert "It cannot pass these to the employee." in costs
+    assert "come to £2,889" in costs
+    assert "many employers pay by policy" in costs
+    assert "None of these immigration costs is included in the employment cost." in costs
+    assert family.startswith("No partner or children are applying as dependants")
+
+
+def test_the_immigration_narrative_follows_the_answers() -> None:
+    employer, _, costs, family = TemplateNarrator().narrate_immigration(
+        _panel(**PANELS["no_licence_with_family"])  # type: ignore[arg-type]
+    )
+    assert "It does not yet hold a sponsor licence, so it applies for one" in employer
+    assert "the sponsor licence fee of £1,682" in costs
+    assert "£4,847" in costs
+    assert family.startswith("A partner and two children are applying as dependants")
+    assert "the Immigration Health Surcharge (children) of £3,104" in family
+    assert "The funds to show rise to £2,070" in family
+
+
+def test_a_fee_the_pack_does_not_hold_is_named_not_guessed() -> None:
+    _, _, costs, family = TemplateNarrator().narrate_immigration(
+        _panel(**PANELS["inside_uk_long_visa"])  # type: ignore[arg-type]
+    )
+    assert "is not held by this tool: check it on GOV.UK" in costs
+    assert "One child is applying as a dependant" in family
+    assert "of Not held" not in family
+
+
+@pytest.mark.parametrize("name", sorted(PANELS))
+def test_every_immigration_number_is_in_the_panel(name: str) -> None:
+    from teq_web.narration.figures import unknown_panel_numbers
+
+    panel = _panel(**PANELS[name])  # type: ignore[arg-type]
+    paragraphs = TemplateNarrator().narrate_immigration(panel)
+    assert unknown_panel_numbers(paragraphs, panel) == set()
+
+
+def test_typed_answers_cannot_vouch_for_a_number() -> None:
+    from teq_web.narration.figures import panel_figure_set, unknown_panel_numbers
+
+    panel = _panel(soc_code="9876", nationality="Atlantis 5432")
+    figures = panel_figure_set(panel)
+    assert Decimal("9876") not in figures
+    assert Decimal("5432") not in figures
+    assert unknown_panel_numbers(["The fee is £9,876 or £5,432."], panel) == {
+        Decimal("9876"),
+        Decimal("5432"),
+    }
+    assert unknown_panel_numbers(["The charge is £2,640."], panel) == set()
+    assert Decimal("3165") in figures  # a subtotal
+    assert Decimal("112") in figures  # the timeline's longest total in days

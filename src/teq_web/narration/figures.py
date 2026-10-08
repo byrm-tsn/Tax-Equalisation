@@ -9,19 +9,32 @@ Text the user typed (item labels and the exchange-rate source) is not a figure: 
 digits are left out of the figure set, wherever the result repeats that text, and are
 ignored where a narrative quotes it. So a label such as ``Bonus 2027`` can be named, but
 cannot vouch for an invented ``2,027``.
+
+:func:`panel_figure_set` and :func:`unknown_panel_numbers` apply the same check to the
+immigration guidance panel: every number the panel holds (cost amounts and formulas,
+subtotals, timeline days and weeks, funds, eligibility and other texts), leaving out the
+answers typed into its free-text questions (the occupation code and the nationality).
 """
 
 from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from decimal import Decimal, InvalidOperation
-from typing import Final
+from typing import Any, Final
 
 from teq_engine import CalculationResult
 
-__all__ = ["figure_set", "numbers_in", "unknown_numbers", "user_texts"]
+__all__ = [
+    "figure_set",
+    "numbers_in",
+    "panel_figure_set",
+    "panel_user_texts",
+    "unknown_numbers",
+    "unknown_panel_numbers",
+    "user_texts",
+]
 
 _NUMBER: Final = re.compile(r"(?<![\w.])(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(%?)")
 
@@ -91,6 +104,52 @@ def unknown_numbers(paragraphs: Iterable[str], result: CalculationResult) -> set
     """
     known = figure_set(result)
     typed = user_texts(result)
+    stated: set[Decimal] = set()
+    for paragraph in paragraphs:
+        stated |= numbers_in(_without(paragraph, typed))
+    return {value for value in stated if value not in known}
+
+
+def panel_user_texts(panel: Mapping[str, Any]) -> tuple[str, ...]:
+    """The answers typed into the panel's free-text questions, longest first."""
+    texts = {
+        str(question["value"])
+        for question in panel["tailoring"]["questions"]
+        if question["type"] == "text" and question["answered"] and question["value"]
+    }
+    return tuple(sorted(texts, key=lambda text: (-len(text), text)))
+
+
+def panel_figure_set(panel: Mapping[str, Any]) -> set[Decimal]:
+    """Every number that appears anywhere in the immigration ``panel`` (and percentages as
+    fractions), leaving out the digits of answers typed into free-text questions."""
+    figures: set[Decimal] = set()
+    typed = panel_user_texts(panel)
+    questions = panel["tailoring"]["questions"]
+    free_text = [q for q in questions if q["type"] == "text"]
+    data = dict(panel)
+    # The free-text questions' own values and labels are the user's words: drop them.
+    data["tailoring"] = {
+        **panel["tailoring"],
+        "questions": [
+            {k: v for k, v in q.items() if k not in ("value", "value_label")}
+            if q in free_text
+            else q
+            for q in questions
+        ],
+    }
+    for text in _strings(json.loads(json.dumps(data))):
+        for value, pct in _tokens(_without(text, typed)):
+            figures.add(value)
+            if pct:
+                figures.add(value / 100)
+    return figures
+
+
+def unknown_panel_numbers(paragraphs: Iterable[str], panel: Mapping[str, Any]) -> set[Decimal]:
+    """Numbers stated in ``paragraphs`` that do not appear in the immigration ``panel``."""
+    known = panel_figure_set(panel)
+    typed = panel_user_texts(panel)
     stated: set[Decimal] = set()
     for paragraph in paragraphs:
         stated |= numbers_in(_without(paragraph, typed))

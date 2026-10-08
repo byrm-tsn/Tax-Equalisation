@@ -29,6 +29,7 @@ from teq_engine.types import (
     SocialSecurityMode,
 )
 from teq_web.scenarios.capability import Refusal, country_name, describe_refusal, region_name
+from teq_web.scenarios.defaults import INDICATIVE_FX_HELP, indicative_fx_initial
 from teq_web.scenarios.services import rates_date_problem, today
 
 __all__ = [
@@ -374,7 +375,7 @@ class ScenarioForm(forms.Form):
                 "Calculate it from the 2026 Turkish rules (needs an exchange rate)",
             ),
         ],
-        initial=HypoTaxMethod.OVERRIDE.value,
+        initial=HypoTaxMethod.CALCULATED.value,
     )
     hypo_override = MoneyField(
         label="Hypothetical tax a year, in pounds",
@@ -398,7 +399,7 @@ class ScenarioForm(forms.Form):
         help_text="Promised to the employee after tax, so it is grossed up.",
     )
     housing_amount = MoneyField(
-        label="Housing a year (cash equivalent)",
+        label="Housing provided by the employer (annual rent or value)",
         help_text="A taxable benefit in kind, taken at the value entered (for example the rent).",
     )
     housing_contribution = MoneyField(
@@ -463,6 +464,11 @@ class ScenarioForm(forms.Form):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        if not self.is_bound and not self.initial:
+            # A fresh form (no scenario link): calculate the hypothetical tax from the
+            # Turkish rules, starting from the indicative rate, labelled as such.
+            self.initial.update(indicative_fx_initial())
+            self.fields["fx_rate"].help_text = INDICATIVE_FX_HELP
         if not self.is_bound and "rates_as_of" not in self.initial:
             self.initial["rates_as_of"] = today()
         self.refusal: Refusal | None = None

@@ -8,7 +8,7 @@ reloadable, shareable and reproducible without a database.
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, Final
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -16,6 +16,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.utils.http import urlencode
 from django.views.decorators.http import require_GET, require_http_methods
+from pydantic import ValidationError
 
 from teq_engine import (
     REFERENCE_RATES_AS_OF,
@@ -29,10 +30,11 @@ from teq_engine import (
     UnsupportedRouteError,
     reference_example,
 )
-from teq_engine.types import SocialSecurityMode
+from teq_engine.types import HypoTaxMethod, SocialSecurityMode
 from teq_web.api.problems import problem
 from teq_web.narration.narrator import TemplateNarrator
 from teq_web.scenarios.capability import describe_refusal
+from teq_web.scenarios.defaults import INDICATIVE_FX_DATE
 from teq_web.scenarios.forms import (
     ItemFormSet,
     ScenarioForm,
@@ -43,11 +45,15 @@ from teq_web.scenarios.forms import (
 from teq_web.scenarios.services import (
     ScenarioLinkError,
     ScenarioTooLargeError,
+    calculated_variant,
     decode_scenario,
     encode_scenario,
     estimate,
     immigration_panel,
     read_scenario_link,
+    social_security_variant,
+    tailoring_params,
+    tailoring_requested,
     today,
 )
 from teq_web.web.presenters import results_context
@@ -73,6 +79,50 @@ def _html(
 
 def _results_url(token: str) -> str:
     return f"{reverse('estimate')}?{urlencode({'s': token})}"
+
+
+# The result tabs: ``?tab=`` value, label and template. Absent or unknown means the first.
+_TABS: Final = (
+    ("tax", "Tax", "web/results.html"),
+    ("immigration", "Immigration", "web/results_immigration.html"),
+    ("explain", "Explain", "web/results_explain.html"),
+)
+_TAB_TEMPLATES: Final = {name: template for name, _, template in _TABS}
+
+
+def _tab_url(token: str, tab: str, tailoring: dict[str, str]) -> str:
+    """The URL of one result tab, keeping the tailoring answers of the current request."""
+    return f"{reverse('estimate')}?{urlencode({'s': token, 'tab': tab, **tailoring})}"
+
+
+def _tabs(token: str, current: str, tailoring: dict[str, str]) -> list[dict[str, Any]]:
+    """The tab bar: the pre-filled inputs form, then one link per result tab."""
+    tabs: list[dict[str, Any]] = [
+        {"label": "Inputs", "url": f"{reverse('form')}?{urlencode({'s': token})}", "current": False}
+    ]
+    tabs += [
+        {"label": label, "url": _tab_url(token, name, tailoring), "current": name == current}
+        for name, label, _ in _TABS
+    ]
+    return tabs
+
+
+def _calculate_url(inputs: ScenarioInput, rates_as_of: date) -> str | None:
+    """The results of the same scenario with the hypothetical tax calculated, or ``None``.
+
+    Offered only for a supplied (override) hypothetical tax, and only when an exchange
+    rate is available on the rates date: the scenario's own, or the indicative rate when
+    the rates date is on or after its date (the engine refuses a rate dated later than
+    the rates date). ``None`` too when the variant would not fit in a link.
+    """
+    if inputs.hypothetical_tax.method is not HypoTaxMethod.OVERRIDE:
+        return None
+    if inputs.fx is None and rates_as_of < INDICATIVE_FX_DATE:
+        return None
+    try:
+        return _results_url(encode_scenario(calculated_variant(inputs), rates_as_of))
+    except (ScenarioTooLargeError, ValidationError):
+        return None
 
 
 def _problem_page(
@@ -173,9 +223,11 @@ def example(request: HttpRequest) -> HttpResponse:
 
 @require_GET
 def estimate_page(request: HttpRequest) -> HttpResponse:
-    """``GET /estimate?s=...``: decode, calculate and show the results.
+    """``GET /estimate?s=...&tab=...``: decode, calculate and show one tab of the results.
 
-    Pages and links echo the link's canonical encoding, never the query string as given.
+    ``tab`` is ``tax`` (the default, also for any unknown value), ``immigration`` or
+    ``explain``; each tab recalculates (sub-millisecond) so nothing is stored. Pages and
+    links echo the link's canonical encoding, never the query string as given.
     """
     if not request.GET.get("s", ""):
         return HttpResponseRedirect(reverse("form"))
@@ -219,23 +271,36 @@ def estimate_page(request: HttpRequest) -> HttpResponse:
             token=token,
         )
     panel, problems = immigration_panel(inputs, request.GET, as_of=today())
+    narrator = TemplateNarrator()
     context = results_context(
         result,
         token=token,
         panel=panel,
         tailoring_problems=problems,
-        narrative=TemplateNarrator().narrate(result),
+        narrative=narrator.narrate(result),
         social_security=inputs.assumptions.social_security,
         notices=[link.engine_notice] if link.engine_notice else [],
+        tailoring_requested=tailoring_requested(request.GET),
     )
     context["api_url"] = (
         reverse("api-v1:estimates")
         + "?"
         + urlencode({"s": token, "include_narrative": "true", "include_immigration": "true"})
     )
+    tab = request.GET.get("tab", "")
+    if tab not in _TAB_TEMPLATES:
+        tab = _TABS[0][0]
+    tailoring = tailoring_params(request.GET)
+    context["tab"] = tab
+    context["tabs"] = _tabs(token, tab, tailoring)
     context["edit_url"] = f"{reverse('form')}?{urlencode({'s': token})}"
     context["compare_url"] = f"{reverse('compare')}?{urlencode({'s': token})}"
-    return _html(request, "web/results.html", context)
+    context["explain_url"] = _tab_url(token, "explain", tailoring)
+    if tab == "tax":
+        context["calculate_url"] = _calculate_url(inputs, rates_as_of)
+    elif tab == "explain":
+        context["immigration_narrative"] = narrator.narrate_immigration(panel)
+    return _html(request, _TAB_TEMPLATES[tab], context)
 
 
 @require_GET
@@ -253,7 +318,6 @@ def compare(request: HttpRequest) -> HttpResponse:
             request, status=400, title="This link cannot be read", message=exc.message
         )
     inputs, rates_as_of, token = link.inputs, link.rates_as_of, link.token
-    data = inputs.model_dump(mode="json")
     columns: list[dict[str, Any]] = []
     for mode, title in (
         (SocialSecurityMode.UK_NIC, "UK National Insurance applies"),
@@ -268,8 +332,7 @@ def compare(request: HttpRequest) -> HttpResponse:
                 "to add one."
             )
             continue
-        assumptions = {**data["assumptions"], "social_security": mode.value}
-        variant = ScenarioInput.model_validate({**data, "assumptions": assumptions})
+        variant = social_security_variant(inputs, mode)
         try:
             column["result"] = estimate(variant, rates_as_of=rates_as_of)
         except UnsupportedRouteError as exc:

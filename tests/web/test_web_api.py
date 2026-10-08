@@ -58,7 +58,7 @@ def test_reference_example_is_a_valid_request_body(body: dict[str, Any]) -> None
 
 
 def test_posting_the_reference_example_back_matches_the_html(
-    client: Client, body: dict[str, Any], reference_html: str, reference_result
+    client: Client, body: dict[str, Any], tax_html: str, reference_result
 ) -> None:
     response = _post(client, body)
     assert response.status_code == 200
@@ -72,13 +72,15 @@ def test_posting_the_reference_example_back_matches_the_html(
     assert totals == ["188676", "180676"]
     assert data["totals"]["total_employer_cost"] == "369352"
     for amount in (*totals, data["totals"]["total_employer_cost"]):
-        assert f"£{int(amount):,}" in reference_html
+        assert f"£{int(amount):,}" in tax_html
     assert data["engine_version"] == ENGINE_VERSION
     assert data["inputs_hash"] == reference_result.inputs_hash
     assert data["rates_as_of"] == "2026-10-08"
     assert data["trace"]
     assert 5 <= len(data["narrative"]) <= 8
     assert data["immigration"]["costs"]["subtotals_display"]["employer_mandatory"] == "£3,165"
+    assert len(data["immigration_narrative"]) == 4
+    assert data["immigration_narrative"][0].startswith("The employer moves first.")
 
 
 def test_options_default_to_the_result_with_its_trace(client: Client, body: dict[str, Any]) -> None:
@@ -87,6 +89,7 @@ def test_options_default_to_the_result_with_its_trace(client: Client, body: dict
     assert "trace" in data
     assert "narrative" not in data
     assert "immigration" not in data
+    assert "immigration_narrative" not in data
 
 
 def test_trace_can_be_left_out(client: Client, body: dict[str, Any]) -> None:
@@ -260,6 +263,7 @@ def test_get_estimate_for_a_link_matches_the_post(
     assert from_link["totals"] == posted["totals"]
     assert from_link["narrative"] == posted["narrative"]
     assert "immigration" not in from_link
+    assert "immigration_narrative" not in from_link
 
 
 def test_invalid_tailoring_in_the_query_points_at_the_parameter(
@@ -387,3 +391,22 @@ def test_exchange_rate_after_the_rates_date_is_a_422(client: Client, body: dict[
     data = _assert_problem(_post(client, body), 422, "validation-failed")
     assert data["engine_code"] == "FX_RATE_IN_FUTURE"
     assert data["errors"][0]["pointer"] == "/fx/as_of"
+
+
+def test_the_immigration_narrative_follows_the_tailoring(
+    client: Client, reference_token: str
+) -> None:
+    data = client.get(
+        "/api/v1/estimates",
+        {"s": reference_token, "include_immigration": "true", "sponsor_licence_held": "false"},
+    ).json()
+    assert "narrative" not in data  # the tax narrative is its own option
+    assert "It does not yet hold a sponsor licence" in data["immigration_narrative"][0]
+    assert "the sponsor licence fee of £1,682" in data["immigration_narrative"][2]
+
+
+def test_openapi_documents_the_immigration_narrative(client: Client) -> None:
+    schemas = client.get("/api/v1/openapi.json").json()["components"]["schemas"]
+    properties = schemas["EstimateResponse"]["properties"]
+    assert "immigration_narrative" in properties
+    assert "immigration_narrative" not in schemas["EstimateResponse"].get("required", [])

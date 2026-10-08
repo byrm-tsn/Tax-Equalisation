@@ -221,7 +221,7 @@ def _run(
         body["narrative"] = TemplateNarrator().narrate(result)
     if options.include_immigration:
         try:
-            body["immigration"] = build_immigration(inputs, tailoring, as_of=today())
+            panel = build_immigration(inputs, tailoring, as_of=today())
         except TailoringError as exc:
             return problem(
                 request,
@@ -232,6 +232,8 @@ def _run(
                     _tailoring_error(text, in_query=tailoring_in_query) for text in exc.problems
                 ],
             )
+        body["immigration"] = panel
+        body["immigration_narrative"] = TemplateNarrator().narrate_immigration(panel)
     if notes:
         body["notes"] = notes
     return json_response(body)

@@ -7,17 +7,20 @@ import json
 import random
 import zlib
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
 from teq_engine import ENGINE_VERSION, REFERENCE_RATES_AS_OF, ScenarioInput, reference_example
 from teq_engine.reference import reference_example_data
+from teq_engine.types import HypoTaxMethod, SocialSecurityMode
 from teq_web.scenarios.services import (
     MAX_ENCODED_LENGTH,
     RATES_DATE_MAX,
     RATES_DATE_MIN,
     ScenarioLinkError,
     ScenarioTooLargeError,
+    calculated_variant,
     decode_scenario,
     default_tailoring,
     encode_scenario,
@@ -25,6 +28,8 @@ from teq_web.scenarios.services import (
     immigration_panel,
     rates_date_problem,
     read_scenario_link,
+    scenario_variant,
+    social_security_variant,
 )
 
 
@@ -226,3 +231,52 @@ def test_invalid_tailoring_falls_back_to_the_defaults() -> None:
     )
     assert problems
     assert panel["costs"]["subtotals_display"]["employer_mandatory"] == "£3,165"
+
+
+def test_a_variant_replaces_whole_sections_and_revalidates() -> None:
+    from pydantic import ValidationError
+
+    base = reference_example()
+    longer = scenario_variant(base, assignment={"length_years": 3})
+    assert longer.assignment.length_years == 3
+    assert longer.items == base.items
+    with pytest.raises(ValueError, match="not a scenario section: colour"):
+        scenario_variant(base, colour="blue")
+    with pytest.raises(ValidationError):  # the home scheme needs an exchange rate
+        social_security_variant(base, SocialSecurityMode.HOME_SCHEME_AGREEMENT)
+
+
+def test_social_security_variant_changes_only_the_mode() -> None:
+    data = reference_example_data() | {"fx": {"rate": "65.7", "as_of": "2026-10-01"}}
+    base = ScenarioInput.model_validate(data)
+    home = social_security_variant(base, SocialSecurityMode.HOME_SCHEME_AGREEMENT)
+    assert home.assumptions.social_security is SocialSecurityMode.HOME_SCHEME_AGREEMENT
+    assert home.model_dump(exclude={"assumptions"}) == base.model_dump(exclude={"assumptions"})
+    assert social_security_variant(home, SocialSecurityMode.UK_NIC) == base
+
+
+def test_calculated_variant_uses_the_indicative_rate_when_none_is_given() -> None:
+    variant = calculated_variant(reference_example())
+    assert variant.hypothetical_tax.method is HypoTaxMethod.CALCULATED
+    assert variant.hypothetical_tax.override is None
+    assert variant.fx is not None
+    assert (variant.fx.rate, variant.fx.as_of, variant.fx.source) == (
+        Decimal("65.7"),
+        date(2026, 9, 15),
+        "indicative",
+    )
+    result = estimate(variant, rates_as_of=REFERENCE_RATES_AS_OF)
+    assert result.hypothetical_tax.mode == "CALCULATED"
+    assert result.hypothetical_tax.amount == Decimal("34212.20")
+    codes = set(result.warning_codes())
+    assert "FX_RATE_USER_SUPPLIED" in codes
+    assert "FX_RATE_STALE" not in codes  # 23 days before the rates date
+
+
+def test_calculated_variant_keeps_the_scenarios_own_rate() -> None:
+    data = reference_example_data() | {
+        "fx": {"rate": "55.25", "as_of": "2026-10-01", "source": "Bank feed"}
+    }
+    variant = calculated_variant(ScenarioInput.model_validate(data))
+    assert variant.fx is not None
+    assert (variant.fx.rate, variant.fx.source) == (Decimal("55.25"), "Bank feed")

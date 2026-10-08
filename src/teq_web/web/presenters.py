@@ -14,10 +14,11 @@ from typing import Any, Final
 
 from teq_engine import CATALOGUE, CalculationResult, Code, LineCode, Treatment, YearResult
 from teq_engine.treatments import NicClass, display_label
-from teq_engine.types import Frequency, ItemResult, SocialSecurityMode
+from teq_engine.types import Assumption, Frequency, ItemResult, SocialSecurityMode
 from teq_engine.types import Warning as EngineWarning
 from teq_engine.warnings import render
-from teq_web.formatting import gbp, percent, year_list, year_span
+from teq_web.formatting import gbp, percent, uk_date, year_list, year_span
+from teq_web.scenarios.capability import country_name, region_name
 from teq_web.scenarios.forms import KIND_LABELS
 
 __all__ = ["Row", "Section", "immigration_view", "results_context"]
@@ -35,6 +36,41 @@ _NUMBER_WORDS: Final = {
 }
 
 _SEVERITY_ORDER: Final = {"error": 0, "warning": 1, "info": 2}
+
+# Severities shown as cards under the headline; the rest are one-line "things to check".
+_CARD_SEVERITIES: Final = frozenset({"error", "warning"})
+
+# The tailoring answers named in the one-line summary above the (collapsed) form.
+_SUMMARY_QUESTIONS: Final = (
+    "application_location",
+    "sponsor_licence_held",
+    "visa_length_years",
+    "dependants_adults",
+    "dependants_children",
+    "tb_listed_resident",
+)
+
+# Cost bases that price a partner or a child applying as a dependant.
+_DEPENDANT_BASES: Final = frozenset(
+    {
+        "PER_ADULT_DEPENDANT",
+        "PER_CHILD_DEPENDANT",
+        "PER_DEPENDANT_VISA_YEAR_ADULT",
+        "PER_DEPENDANT_VISA_YEAR_CHILD",
+    }
+)
+
+# The assumptions the reference pack names, in its order (the tax year is synthesised from
+# the result by _tax_year_row). The first code present in the result fills each topic.
+_PACK_ASSUMPTIONS: Final = (
+    ("UK residence", (Code.UK_RESIDENT_FULL_YEAR,)),
+    (
+        "Which National Insurance applies",
+        (Code.UK_NIC_APPLIES, Code.HOME_SCHEME_CERTIFICATE_REQUIRED),
+    ),
+    ("Overseas Workday Relief", (Code.OWR_NOT_MODELLED,)),
+    ("England or Scotland", (Code.ENGLAND_RATES,)),
+)
 
 _NO_UK_NIC: Final = "No UK National Insurance: the employee stays in the Turkish scheme"
 
@@ -179,6 +215,22 @@ def _line_row(result: CalculationResult, code: LineCode, *, strong: bool = False
     )
 
 
+def _route_place(result: CalculationResult) -> str:
+    """The route in words: ``Turkey to England`` (the region when there is one)."""
+    route = result.route
+    host = region_name(route.region) if route.region else country_name(route.host)
+    return f"{country_name(route.home)} to {host}"
+
+
+def _route_words(result: CalculationResult) -> str:
+    """The lead line in words: ``Turkey to England, 2 years, rates as at 8 October 2026``."""
+    count = len(result.years)
+    return (
+        f"{_route_place(result)}, {count} year{'s' if count != 1 else ''}, "
+        f"rates as at {uk_date(result.rates_as_of)}"
+    )
+
+
 def _headline(result: CalculationResult) -> list[dict[str, str]]:
     years = result.years
     cards = [
@@ -251,6 +303,90 @@ def _flag_card(warnings: list[EngineWarning]) -> dict[str, Any]:
         "questions": questions,
         "years": year_span(years),
     }
+
+
+def _flag_cards(flags: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The flags that need attention (errors and warnings), shown as cards."""
+    return [flag for flag in flags if flag["severity"] in _CARD_SEVERITIES]
+
+
+def _checks(flags: Sequence[dict[str, Any]]) -> list[dict[str, str]]:
+    """The information flags as one line each: title, years, text and question.
+
+    The code is kept for the line's ``title`` attribute only.
+    """
+    return [
+        {
+            "code": flag["code"],
+            "title": flag["title"],
+            "years": flag["years"],
+            "text": " ".join(flag["texts"]),
+            "question": " ".join(flag["questions"]),
+        }
+        for flag in flags
+        if flag["severity"] not in _CARD_SEVERITIES
+    ]
+
+
+def _assumption_row(assumption: Assumption, topic: str = "") -> dict[str, str]:
+    return {
+        "topic": topic,
+        "code": assumption.code,
+        "text": assumption.text,
+        "question": assumption.question,
+    }
+
+
+def _tax_year_row(result: CalculationResult, carried: Assumption | None) -> dict[str, str]:
+    """The pack's tax-year assumption, in words, from the result's UK tax years.
+
+    When later rates are carried forward (``RATES_UNCHANGED_LATER_YEARS``) the row says
+    which assignment years that affects and takes that assumption's code and question.
+    """
+    years = result.years
+    first, last = years[0], years[-1]
+    if len(years) == 1:
+        text = f"The assignment is UK tax year {first.uk_tax_year}."
+    else:
+        text = (
+            f"Year 1 is UK tax year {first.uk_tax_year}; the assignment runs to {last.uk_tax_year}."
+        )
+    affected = [y.assignment_year for y in years if y.rates_carried_forward]
+    if carried is not None and affected:
+        text += (
+            " Rates not yet published are carried forward unchanged from the latest "
+            f"published year, which affects {year_span(affected)}."
+        )
+        return {
+            "topic": "Tax year",
+            "code": carried.code,
+            "text": text,
+            "question": carried.question,
+        }
+    return {
+        "topic": "Tax year",
+        "code": "",
+        "text": text,
+        "question": f"Does the assignment start in UK tax year {first.uk_tax_year}?",
+    }
+
+
+def _assumption_groups(result: CalculationResult) -> dict[str, list[dict[str, str]]]:
+    """The pack's assumptions first, in its order, then every other one in engine order."""
+    by_code = {assumption.code: assumption for assumption in result.assumptions}
+    used: set[str] = set()
+    pack: list[dict[str, str]] = []
+    for topic, codes in _PACK_ASSUMPTIONS:
+        found = next((by_code[c.value] for c in codes if c.value in by_code), None)
+        if found is not None:
+            pack.append(_assumption_row(found, topic))
+            used.add(found.code)
+    carried = by_code.get(Code.RATES_UNCHANGED_LATER_YEARS.value)
+    pack.append(_tax_year_row(result, carried))
+    if carried is not None:
+        used.add(carried.code)
+    further = [_assumption_row(a) for a in result.assumptions if a.code not in used]
+    return {"pack": pack, "further": further}
 
 
 def _unprefixed(text: str) -> str:
@@ -547,10 +683,79 @@ def _trace(result: CalculationResult) -> list[dict[str, Any]]:
     ]
 
 
-def immigration_view(panel: dict[str, Any]) -> dict[str, Any]:
-    """Lookups the panel template needs but cannot do itself (titles by id, subtotals)."""
+def _first_sentence(text: str) -> str:
+    """The first sentence of ``text`` (the whole text when it has only one)."""
+    match = re.match(r"(.+?[.!?])(?:\s|$)", text.strip())
+    return match.group(1) if match else text.strip()
+
+
+def _lower_first(text: str) -> str:
+    return text[:1].lower() + text[1:]
+
+
+def _tailoring_summary(questions: Sequence[dict[str, Any]], *, requested: bool) -> str:
+    """One line naming the answers the guidance is built on, from a fixed shortlist.
+
+    ``Tailor this guidance (assumed: applying from outside the UK, sponsor licence held,
+    2-year visa, no dependants, lives in a TB-test country such as Turkey)``; "answered"
+    instead of "assumed" once the user has sent any answer.
+    """
+    by_id = {question["id"]: question for question in questions}
+    parts: list[str] = []
+    for question_id in _SUMMARY_QUESTIONS:
+        if question_id == "dependants_children":
+            continue  # phrased together with the partner
+        question = by_id.get(question_id)
+        if question is None:
+            continue
+        value, label = question["value"], str(question["value_label"])
+        if question_id == "application_location":
+            parts.append(f"applying from {_lower_first(label)}")
+        elif question_id == "sponsor_licence_held" and isinstance(value, bool):
+            parts.append("sponsor licence held" if value else "no sponsor licence yet")
+        elif question_id == "visa_length_years":
+            parts.append(f"{label}-year visa")
+        elif question_id == "dependants_adults":
+            parts.append(_dependants_phrase(by_id))
+        elif question_id == "tb_listed_resident" and isinstance(value, bool):
+            parts.append(
+                "lives in a TB-test country such as Turkey"
+                if value
+                else "not living in a TB-test country"
+            )
+        else:
+            parts.append(f"{_lower_first(str(question['short_label']))}: {label}")
+    prefix = "answered" if requested else "assumed"
+    return f"Tailor this guidance ({prefix}: {', '.join(parts)})"
+
+
+def _dependants_phrase(by_id: dict[str, dict[str, Any]]) -> str:
+    adults = by_id.get("dependants_adults", {}).get("value") or 0
+    children = by_id.get("dependants_children", {}).get("value") or 0
+    if not adults and not children:
+        return "no dependants"
+    who = []
+    if adults:
+        who.append("a partner")
+    if children:
+        who.append(f"{children} child{'ren' if children != 1 else ''}")
+    return " and ".join(who) + " applying as dependants"
+
+
+def immigration_view(
+    panel: dict[str, Any], *, tailoring_requested: bool = False, place: str = ""
+) -> dict[str, Any]:
+    """Lookups and groupings the panel template needs but cannot do itself.
+
+    Titles by id, subtotals, the steps in order with who does each and one line on it,
+    the family block (requirements marked ``topic: family``, the dependant cost lines and
+    the funds to show), and the tailoring summary line. The tailoring form opens only
+    when the request carried an answer (``tailoring_requested``). ``place`` is the route
+    in words (``Turkey to England``) for the title.
+    """
     costs: dict[str, Any] = panel["costs"]
     timeline: dict[str, Any] = panel["timeline"]
+    eligibility: dict[str, Any] = panel["eligibility"]
     titles = {stage["id"]: stage["title"] for stage in timeline["stages"]}
     titles.update({stage["id"]: stage["title"] for stage in timeline["not_applicable"]})
     stages = [
@@ -561,8 +766,40 @@ def immigration_view(panel: dict[str, Any]) -> dict[str, Any]:
         }
         for stage in timeline["stages"]
     ]
+    process = [
+        {
+            "title": stage["title"],
+            "who": stage["actor_label"]
+            + (
+                f" with {', '.join(stage['also_involves_labels'])}"
+                if stage["also_involves_labels"]
+                else ""
+            ),
+            "time": stage["range_text"],
+            "line": _first_sentence(stage["description"]),
+        }
+        for stage in timeline["stages"]
+    ]
+    requirements = [*eligibility["general"], *eligibility["circumstance_dependent"]]
+    family_requirements = [item for item in requirements if item.get("topic") == "family"]
     cost_labels = {line["id"]: line["label"] for line in costs["lines"]}
+    visa = str(panel["title"]).rsplit(": ", 1)[-1]
     return {
+        "title": f"{place}, {visa}" if place else str(panel["title"]),
+        "circumstance": [
+            item for item in eligibility["circumstance_dependent"] if item.get("topic") != "family"
+        ],
+        "process": process,
+        "stage_titles": [stage["title"] for stage in process],
+        "family": {
+            "requirements": family_requirements,
+            "costs": [line for line in costs["lines"] if line["basis"] in _DEPENDANT_BASES],
+            "funds": panel["maintenance_funds"],
+        },
+        "tailoring_open": tailoring_requested,
+        "tailoring_summary": _tailoring_summary(
+            panel["tailoring"]["questions"], requested=tailoring_requested
+        ),
         "subtotals": [
             {"key": key, "label": label, "display": costs["subtotals_display"][key]}
             for key, label in costs["subtotal_labels"].items()
@@ -586,8 +823,9 @@ def results_context(
     narrative: Sequence[str],
     social_security: SocialSecurityMode | None = None,
     notices: Sequence[str] = (),
+    tailoring_requested: bool = False,
 ) -> dict[str, Any]:
-    """Everything ``web/results.html`` shows, in the reference pack's order.
+    """Everything the result tabs show, in the reference pack's order.
 
     ``social_security`` is the scenario's mode; when not given it is read from the
     result (the Turkish employer line is present only in home-scheme mode).
@@ -600,9 +838,11 @@ def results_context(
             else SocialSecurityMode.UK_NIC
         )
     home = social_security is SocialSecurityMode.HOME_SCHEME_AGREEMENT
+    flags = _flags(result)
     return {
         "result": result,
         "token": token,
+        "route_words": _route_words(result),
         "notices": list(notices),
         "year_headers": [f"Year {y.assignment_year} ({y.uk_tax_year})" for y in years],
         "year_count": len(years),
@@ -612,7 +852,10 @@ def results_context(
             else "Total"
         ),
         "headline": _headline(result),
-        "flags": _flags(result),
+        "in_short": list(narrative[:3]),
+        "flags": flags,
+        "flag_cards": _flag_cards(flags),
+        "checks": _checks(flags),
         "net_guarantee": _net_guarantee(result),
         "hypothetical_tax": result.hypothetical_tax,
         "treatments": _treatments(result, home=home),
@@ -621,8 +864,11 @@ def results_context(
         "home_scheme": home,
         "year_table": _year_table(result),
         "assumptions": list(result.assumptions),
+        "assumption_groups": _assumption_groups(result),
         "panel": panel,
-        "immigration": immigration_view(panel),
+        "immigration": immigration_view(
+            panel, tailoring_requested=tailoring_requested, place=_route_place(result)
+        ),
         "tailoring_problems": list(tailoring_problems),
         "narrative": list(narrative),
         "trace": _trace(result),

@@ -6,6 +6,9 @@
   page is reloadable, shareable and reproducible with no database.
   :func:`decode_scenario` is the short form returning only the inputs and the date.
 * :func:`rates_date_problem` bounds every rates date the tool accepts.
+* :func:`scenario_variant` and its two uses, :func:`social_security_variant` and
+  :func:`calculated_variant`, derive a variant of a scenario (for the compare view and
+  the "calculate it from the Turkish rules" link).
 * :func:`immigration_panel` builds the guidance panel for a scenario.
 * :func:`today` is the only clock in the application (the engine has none).
 """
@@ -26,9 +29,10 @@ from django.utils import timezone
 from pydantic import ValidationError
 
 from teq_engine import ENGINE_VERSION, CalculationResult, ScenarioInput, calculate, default_provider
-from teq_engine.types import canonical_json
+from teq_engine.types import HypoTaxMethod, SocialSecurityMode, canonical_json
 from teq_guidance import TailoringAnswers, TailoringError, build_panel
 from teq_web.formatting import uk_date
+from teq_web.scenarios.defaults import indicative_fx_snapshot
 
 __all__ = [
     "MAX_ENCODED_LENGTH",
@@ -38,6 +42,7 @@ __all__ = [
     "ScenarioLinkError",
     "ScenarioTooLargeError",
     "build_immigration",
+    "calculated_variant",
     "decode_scenario",
     "default_tailoring",
     "encode_scenario",
@@ -45,6 +50,9 @@ __all__ = [
     "immigration_panel",
     "rates_date_problem",
     "read_scenario_link",
+    "scenario_variant",
+    "social_security_variant",
+    "tailoring_params",
     "tailoring_requested",
     "today",
 ]
@@ -262,6 +270,48 @@ def decode_scenario(token: str) -> tuple[ScenarioInput, date]:
     return link.inputs, link.rates_as_of
 
 
+# --------------------------------------------------------------------------- variants
+
+
+def scenario_variant(inputs: ScenarioInput, **sections: object) -> ScenarioInput:
+    """``inputs`` with whole top-level sections replaced, validated again by the engine.
+
+    Each keyword names a top-level field of the scenario (``assumptions``,
+    ``hypothetical_tax``, ``fx`` and so on) and gives its new value as plain JSON data.
+    Raises ``ValueError`` for a name the scenario does not have, and pydantic's
+    ``ValidationError`` when the variant breaks a scenario rule.
+    """
+    data = inputs.model_dump(mode="json")
+    unknown = sorted(set(sections) - set(data))
+    if unknown:
+        raise ValueError(f"not a scenario section: {', '.join(unknown)}")
+    return ScenarioInput.model_validate({**data, **sections})
+
+
+def social_security_variant(inputs: ScenarioInput, mode: SocialSecurityMode) -> ScenarioInput:
+    """The same scenario under the social security ``mode``."""
+    assumptions = {**inputs.assumptions.model_dump(mode="json"), "social_security": mode.value}
+    return scenario_variant(inputs, assumptions=assumptions)
+
+
+def calculated_variant(inputs: ScenarioInput) -> ScenarioInput:
+    """The same scenario with the hypothetical tax calculated from the Turkish rules.
+
+    Uses the scenario's own exchange rate, or the indicative rate of
+    :mod:`teq_web.scenarios.defaults` when it has none (the result then pins that rate,
+    its date and its "indicative" source, and flags it).
+    """
+    hypothetical_tax = {
+        **inputs.hypothetical_tax.model_dump(mode="json"),
+        "method": HypoTaxMethod.CALCULATED.value,
+        "override": None,
+    }
+    fx = inputs.fx if inputs.fx is not None else indicative_fx_snapshot()
+    return scenario_variant(
+        inputs, hypothetical_tax=hypothetical_tax, fx=fx.model_dump(mode="json")
+    )
+
+
 # --------------------------------------------------------------------------- immigration
 
 
@@ -277,6 +327,15 @@ def default_tailoring(inputs: ScenarioInput) -> TailoringAnswers:
 def tailoring_requested(params: Mapping[str, object]) -> bool:
     """Whether ``params`` (a query string) carries any tailoring answer."""
     return any(key in _TAILORING_FIELDS for key in params)
+
+
+def tailoring_params(params: Mapping[str, object]) -> dict[str, str]:
+    """The tailoring answers in ``params`` (a query string), in their order, as given.
+
+    Everything else (the scenario, the tab, unknown keys) is left out, so links between
+    the result tabs carry the answers and nothing else from the request.
+    """
+    return {key: str(value) for key, value in params.items() if key in _TAILORING_FIELDS}
 
 
 def build_immigration(

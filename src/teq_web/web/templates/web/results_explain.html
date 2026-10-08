@@ -1,0 +1,65 @@
+{% extends "web/results_base.html" %}
+{% load teq %}
+{# The Explain tab: the plain-English explanation, the calculation trace and provenance. #}
+{% block title %}Explanation – Tax equalisation cost estimator{% endblock %}
+{% block heading %}The estimate explained{% endblock %}
+{% block tab %}
+<section id="narrative" class="narrative" aria-labelledby="narrative-title">
+  <h2 id="narrative-title">In plain English: the tax and the cost</h2>
+  {% for paragraph in narrative %}<p>{{ paragraph }}</p>{% endfor %}
+</section>
+
+<section id="immigration-narrative" class="narrative" aria-labelledby="immigration-narrative-title">
+  <h2 id="immigration-narrative-title">In plain English: the immigration steps</h2>
+  {% for paragraph in immigration_narrative %}<p>{{ paragraph }}</p>{% endfor %}
+  <p class="muted">The costs, documents and timings in detail, with their sources, are on the Immigration tab.</p>
+</section>
+
+<section id="trace" aria-labelledby="trace-title">
+  <h2 id="trace-title">Calculation trace</h2>
+  <details>
+    <summary>Show every step ({{ trace|length }} steps), with HMRC manual references</summary>
+    {% for step in trace %}
+      <div class="trace-step" id="{{ step.id }}">
+        <h3>{{ step.id }}. {{ step.title }}{% if step.year %}, year {{ step.year }}{% endif %}</h3>
+        <p>{{ step.description }}</p>
+        {% if step.refs %}<p class="muted">References: {{ step.refs|join:", " }}</p>{% endif %}
+        <dl class="values">
+          {% for key, value in step.values %}<dt>{{ key }}</dt><dd>{{ value }}</dd>{% endfor %}
+        </dl>
+      </div>
+    {% endfor %}
+  </details>
+</section>
+
+<section id="provenance" aria-labelledby="provenance-title">
+  <h2 id="provenance-title">Provenance</h2>
+  <dl class="values">
+    <dt>Engine version</dt><dd>{{ result.engine_version }} (result schema {{ result.schema_version }})</dd>
+    <dt>Rates as at</dt><dd>{{ result.rates_as_of|uk_date }} ({{ result.rates_as_of|date:"Y-m-d" }})</dd>
+    <dt>Inputs hash</dt><dd class="code">{{ result.inputs_hash }}</dd>
+    <dt>Rate-set fingerprint</dt><dd class="code">{{ result.rate_set_fingerprint }}</dd>
+    <dt>Period mode</dt><dd>{{ result.period_mode }}</dd>
+    <dt>Rounding</dt><dd>gross {{ result.rounding.gross_cash }}, lines {{ result.rounding.lines }}, totals {{ result.rounding.totals }}, ratios {{ result.rounding.ratios }}</dd>
+    <dt>Immigration guidance</dt><dd>{{ panel.pack_id }} version {{ panel.version }}, verified {{ panel.verified_at|uk_date }}</dd>
+    <dt>Disclaimer version</dt><dd>{{ result.disclaimer_version }}</dd>
+  </dl>
+  <div class="table-wrap">
+    <table>
+      <caption>Rate sets used</caption>
+      <thead><tr><th scope="col">Rate set</th><th scope="col">In force</th><th scope="col">Used for</th><th scope="col">Verified</th><th scope="col">Sources</th></tr></thead>
+      <tbody>
+        {% for entry in provenance %}
+          <tr>
+            <td><span class="code">{{ entry.id }}</span><br><span class="muted" title="{{ entry.checksum }}">{{ entry.checksum|short_hash }}</span></td>
+            <td>{{ entry.effective_from|uk_date }} to {% if entry.effective_to %}{{ entry.effective_to|uk_date }}{% else %}open{% endif %}</td>
+            <td>year{{ entry.used_for_years|length|pluralize }} {{ entry.used_for_years|join:", " }}</td>
+            <td>{% if entry.verified_at %}{{ entry.verified_at|uk_date }}{% else %}not recorded{% endif %}</td>
+            <td>{% for url in entry.sources %}<a href="{{ url }}" rel="noopener noreferrer">{{ url }}</a>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

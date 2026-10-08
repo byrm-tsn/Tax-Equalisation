@@ -1,24 +1,18 @@
-{% extends "web/base.html" %}
+{% extends "web/results_base.html" %}
 {% load teq %}
+{# The Tax tab: headline, summary, checks, the pack's five steps and the assumptions. #}
 {% block title %}Results – Tax equalisation cost estimator{% endblock %}
-{% block content %}
-<h1>Employer cost of the assignment</h1>
-<p class="lead">{{ result.route.home }} to {{ result.route.host }} ({{ result.route.region }}), {{ year_count }} year{{ year_count|pluralize }}, rates as at {{ result.rates_as_of|uk_date }}. All amounts in pounds.</p>
-{% for notice in notices %}<p class="flag flag--info notice"><span class="badge badge--info">info</span> {{ notice }}</p>{% endfor %}
-
+{% block tab %}
 <nav class="contents callout no-print" aria-label="On this page">
   <ol>
-    <li><a href="#flags">Flags</a></li>
+    <li><a href="#in-short">In short</a></li>
+    <li><a href="#flags">Things to check</a></li>
     <li><a href="#net-guarantee">1. Net guarantee</a></li>
     <li><a href="#treatment">2. Treatment of each item</a></li>
     <li><a href="#gross-up">3. Gross-up</a></li>
     <li><a href="#employer-charges">4. Employer charges</a></li>
     <li><a href="#per-year">5. Year by year</a></li>
     <li><a href="#assumptions">6. Assumptions</a></li>
-    <li><a href="#immigration">Immigration</a></li>
-    <li><a href="#narrative">In plain English</a></li>
-    <li><a href="#trace">Calculation trace</a></li>
-    <li><a href="#provenance">Provenance</a></li>
   </ol>
 </nav>
 
@@ -35,24 +29,40 @@
   </div>
 </section>
 
+<section id="in-short" class="narrative" aria-labelledby="in-short-title">
+  <h2 id="in-short-title">In short</h2>
+  {% for paragraph in in_short %}<p>{{ paragraph }}</p>{% endfor %}
+  <p><a href="{{ explain_url }}">The full explanation, including the immigration steps</a></p>
+</section>
+
 <section id="flags" aria-labelledby="flags-title">
-  <h2 id="flags-title">Flags</h2>
-  <ul class="flags">
-    {% for flag in flags %}
-      <li class="flag flag--{{ flag.severity }}">
-        <span class="badge badge--{{ flag.severity }}">{{ flag.severity }}</span>
-        <strong>{{ flag.title }}</strong>{% if flag.years %} ({{ flag.years }}){% endif %}
-        {% for text in flag.texts %}<p>{{ text }}</p>{% endfor %}
-        <p class="muted">Question: {{ flag.questions|join:" " }} <span class="code">{{ flag.code }}</span></p>
-      </li>
-    {% endfor %}
-  </ul>
+  <h2 id="flags-title">Things to check</h2>
+  {% if flag_cards %}
+    <ul class="flags">
+      {% for flag in flag_cards %}
+        <li class="flag flag--{{ flag.severity }}" title="{{ flag.code }}">
+          <span class="badge badge--{{ flag.severity }}">{{ flag.severity }}</span>
+          <strong>{{ flag.title }}</strong>{% if flag.years %} ({{ flag.years }}){% endif %}
+          {% for text in flag.texts %}<p>{{ text }}</p>{% endfor %}
+          <p class="muted">Question: {{ flag.questions|join:" " }}</p>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% if checks %}
+    <ul class="checks">
+      {% for check in checks %}
+        <li class="check" title="{{ check.code }}"><strong>{{ check.title }}{% if check.years %} ({{ check.years }}){% endif %}.</strong> {{ check.text }} <span class="question">{{ check.question }}</span></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
 </section>
 
 <section id="net-guarantee" aria-labelledby="ng-title">
   <h2 id="ng-title">1. Net guarantee</h2>
   <p>What the employee is promised in their pocket each year. The hypothetical Turkish tax was
     {% if hypothetical_tax.mode == "OVERRIDE" %}supplied as an assumption{% if hypothetical_tax.calculated_for_comparison %} (calculated under the Turkish rules it would be {{ hypothetical_tax.calculated_for_comparison|gbp }}){% endif %}{% else %}calculated under the Turkish rules{% if hypothetical_tax.fx %} at {{ hypothetical_tax.fx.rate|plain_number }} lira to the pound, dated {{ hypothetical_tax.fx.as_of|uk_date }}{% endif %}{% endif %}.</p>
+  {% if calculate_url %}<p class="calculate"><a href="{{ calculate_url }}">Calculate it from the 2026 Turkish rules instead</a>{% if not hypothetical_tax.fx %} <span class="muted">(at an indicative mid-September 2026 rate of 65.7 lira to the pound; confirm it)</span>{% endif %}</p>{% endif %}
   <div class="table-wrap">
     <table>
       <thead><tr><th scope="col">Line</th>{% for header in year_headers %}<th scope="col" class="num">{{ header }}</th>{% endfor %}</tr></thead>
@@ -93,7 +103,7 @@
             <th scope="row">{{ row.name }}</th>
             <td>{{ row.amount }}</td>
             <td>{{ row.years }}</td>
-            <td><strong>{{ row.label }}</strong>{% if row.part %} {{ row.part }}{% endif %}<br><span class="code">{{ row.treatment }}</span></td>
+            <td title="{{ row.treatment }}"><strong>{{ row.label }}</strong>{% if row.part %} {{ row.part }}{% endif %}</td>
             <td>{{ row.nic }}</td>
             <td>{{ row.how }}</td>
           </tr>
@@ -114,7 +124,7 @@
         {% for row in gross_up.rows %}
           <tr><th scope="row">{{ row.label }}</th>{% for value in row.values %}<td class="num">{{ value }}</td>{% endfor %}</tr>
         {% endfor %}
-        <tr><th scope="row">Trace step</th>{% for step_id in gross_up.step_ids %}<td class="num"><a href="#{{ step_id }}">{{ step_id }}</a></td>{% endfor %}</tr>
+        <tr><th scope="row">Trace step</th>{% for step_id in gross_up.step_ids %}<td class="num"><a href="{{ explain_url }}#{{ step_id }}">{{ step_id }}</a></td>{% endfor %}</tr>
       </tbody>
     </table>
   </div>
@@ -163,79 +173,27 @@
 
 <section id="assumptions" aria-labelledby="assumptions-title">
   <h2 id="assumptions-title">6. Assumptions</h2>
+  <h3 id="pack-assumptions">The assumptions the reference pack asks for</h3>
   <div class="table-wrap">
-    <table>
+    <table aria-labelledby="pack-assumptions">
+      <thead><tr><th scope="col">Topic</th><th scope="col">Assumption</th><th scope="col">Question to confirm it</th></tr></thead>
+      <tbody>
+        {% for row in assumption_groups.pack %}
+          <tr{% if row.code %} title="{{ row.code }}"{% endif %}><th scope="row">{{ row.topic }}</th><td>{{ row.text }}</td><td>{{ row.question }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <h3 id="further-assumptions">Further assumptions</h3>
+  <div class="table-wrap">
+    <table aria-labelledby="further-assumptions">
       <thead><tr><th scope="col">Assumption</th><th scope="col">Question to confirm it</th></tr></thead>
       <tbody>
-        {% for assumption in assumptions %}
-          <tr><td>{{ assumption.text }} <span class="code">{{ assumption.code }}</span></td><td>{{ assumption.question }}</td></tr>
+        {% for row in assumption_groups.further %}
+          <tr title="{{ row.code }}"><td>{{ row.text }}{% if row.code == "HYPO_TAX_OVERRIDE" and calculate_url %} <a href="{{ calculate_url }}">Calculate it from the 2026 Turkish rules instead</a>{% endif %}</td><td>{{ row.question }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </section>
-
-{% include "web/_immigration.html" %}
-
-<section id="narrative" class="narrative" aria-labelledby="narrative-title">
-  <h2 id="narrative-title">In plain English</h2>
-  {% for paragraph in narrative %}<p>{{ paragraph }}</p>{% endfor %}
-</section>
-
-<section id="trace" aria-labelledby="trace-title">
-  <h2 id="trace-title">Calculation trace</h2>
-  <details>
-    <summary>Show every step ({{ trace|length }} steps), with HMRC manual references</summary>
-    {% for step in trace %}
-      <div class="trace-step" id="{{ step.id }}">
-        <h3>{{ step.id }}. {{ step.title }}{% if step.year %}, year {{ step.year }}{% endif %}</h3>
-        <p>{{ step.description }}</p>
-        {% if step.refs %}<p class="muted">References: {{ step.refs|join:", " }}</p>{% endif %}
-        <dl class="values">
-          {% for key, value in step.values %}<dt>{{ key }}</dt><dd>{{ value }}</dd>{% endfor %}
-        </dl>
-      </div>
-    {% endfor %}
-  </details>
-</section>
-
-<section id="provenance" aria-labelledby="provenance-title">
-  <h2 id="provenance-title">Provenance</h2>
-  <dl class="values">
-    <dt>Engine version</dt><dd>{{ result.engine_version }} (result schema {{ result.schema_version }})</dd>
-    <dt>Rates as at</dt><dd>{{ result.rates_as_of|uk_date }} ({{ result.rates_as_of|date:"Y-m-d" }})</dd>
-    <dt>Inputs hash</dt><dd class="code">{{ result.inputs_hash }}</dd>
-    <dt>Rate-set fingerprint</dt><dd class="code">{{ result.rate_set_fingerprint }}</dd>
-    <dt>Period mode</dt><dd>{{ result.period_mode }}</dd>
-    <dt>Rounding</dt><dd>gross {{ result.rounding.gross_cash }}, lines {{ result.rounding.lines }}, totals {{ result.rounding.totals }}, ratios {{ result.rounding.ratios }}</dd>
-    <dt>Immigration guidance</dt><dd>{{ panel.pack_id }} version {{ panel.version }}, verified {{ panel.verified_at|uk_date }}</dd>
-    <dt>Disclaimer version</dt><dd>{{ result.disclaimer_version }}</dd>
-  </dl>
-  <div class="table-wrap">
-    <table>
-      <caption>Rate sets used</caption>
-      <thead><tr><th scope="col">Rate set</th><th scope="col">In force</th><th scope="col">Used for</th><th scope="col">Verified</th><th scope="col">Sources</th></tr></thead>
-      <tbody>
-        {% for entry in provenance %}
-          <tr>
-            <td><span class="code">{{ entry.id }}</span><br><span class="muted" title="{{ entry.checksum }}">{{ entry.checksum|short_hash }}</span></td>
-            <td>{{ entry.effective_from|uk_date }} to {% if entry.effective_to %}{{ entry.effective_to|uk_date }}{% else %}open{% endif %}</td>
-            <td>year{{ entry.used_for_years|length|pluralize }} {{ entry.used_for_years|join:", " }}</td>
-            <td>{% if entry.verified_at %}{{ entry.verified_at|uk_date }}{% else %}not recorded{% endif %}</td>
-            <td>{% for url in entry.sources %}<a href="{{ url }}" rel="noopener noreferrer">{{ url }}</a>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<p class="disclaimer">An illustration, not tax or immigration advice. Check the figures with a tax adviser and the immigration steps on GOV.UK before relying on them.</p>
-
-<div class="links">
-  <a class="button secondary" href="{{ edit_url }}">Edit these inputs</a>
-  <a class="button secondary" href="{{ compare_url }}">Compare UK National Insurance with the Turkish scheme</a>
-  <a class="button secondary" href="{{ api_url }}">This result in the API (JSON)</a>
-  <a class="button secondary" href="{% url 'example' %}">Reference example</a>
-</div>
 {% endblock %}

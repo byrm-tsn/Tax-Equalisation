@@ -136,10 +136,27 @@ def reference_result() -> CalculationResult:
     return calculate(reference_example(), default_provider(), rates_as_of=REFERENCE_RATES_AS_OF)
 
 
-@pytest.fixture(scope="session")
-def reference_html(django_test_environment: Any, reference_token: str) -> str:
+def _get_page(token: str, **params: str) -> str:
     from django.test import Client
 
-    response = Client().get("/estimate", {"s": reference_token})
+    response = Client().get("/estimate", {"s": token, **params})
     assert response.status_code == 200
     return str(response.content.decode())
+
+
+@pytest.fixture(scope="session")
+def tax_html(django_test_environment: Any, reference_token: str) -> str:
+    """The reference example's Tax tab (the tab ``/example`` lands on)."""
+    return _get_page(reference_token)
+
+
+@pytest.fixture(scope="session")
+def immigration_html(django_test_environment: Any, reference_token: str) -> str:
+    """The reference example's Immigration tab."""
+    return _get_page(reference_token, tab="immigration")
+
+
+@pytest.fixture(scope="session")
+def explain_html(django_test_environment: Any, reference_token: str) -> str:
+    """The reference example's Explain tab."""
+    return _get_page(reference_token, tab="explain")

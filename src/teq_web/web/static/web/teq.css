@@ -39,6 +39,15 @@ a:focus, input:focus, select:focus, button:focus, summary:focus {
 .brand { font-weight: 700; font-size: 1.1rem; text-decoration: none; }
 .site-header nav a { margin-left: 1rem; }
 
+/* Result tabs: plain links, the current one marked with aria-current. */
+.tabs { border-bottom: 2px solid var(--ink); margin: 1rem 0 1.5rem; }
+.tabs ul { list-style: none; display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0; padding: 0; }
+.tabs a {
+  display: block; padding: 0.5rem 1rem; text-decoration: none; font-weight: 600;
+  border: 1px solid var(--line); border-bottom: 0; background: var(--tint); color: var(--accent);
+}
+.tabs a[aria-current="page"] { background: var(--paper); color: var(--ink); border-color: var(--ink); position: relative; top: 2px; border-bottom: 2px solid var(--paper); }
+
 .site-footer { border-top: 1px solid var(--line); margin-top: 3rem; padding-top: 1rem; color: var(--muted); }
 
 h1 { font-size: 1.8rem; margin: 1.5rem 0 0.5rem; }
@@ -97,6 +106,9 @@ tr.strong td, tr.strong th { font-weight: 700; border-top: 2px solid var(--ink);
 .card .note { color: var(--muted); font-size: 0.9rem; }
 
 .flags { list-style: none; padding: 0; }
+.checks { padding-left: 1.25rem; margin: 0.5rem 0; }
+.check { margin: 0.35rem 0; max-width: 56rem; }
+.check .question { display: block; color: var(--muted); font-size: 0.9rem; }
 .flag { border-left: 5px solid var(--info); background: var(--tint); padding: 0.5rem 0.75rem; margin: 0.5rem 0; }
 .flag--error { border-color: var(--error); }
 .flag--warning { border-color: var(--warning); }
@@ -119,7 +131,7 @@ dl.values dd { margin: 0; font-variant-numeric: tabular-nums; word-break: break-
 .disclaimer { font-weight: 700; border: 2px solid var(--ink); padding: 0.75rem 1rem; }
 
 @media print {
-  .site-header nav, .skip-link, .links, form.tailoring, .no-print, button, .button { display: none !important; }
+  .site-header nav, .skip-link, .links, .tailoring, .no-print, button, .button { display: none !important; }
   .site-header { background: none; color: var(--ink); border-bottom: 2px solid var(--ink); }
   .site-header a { color: var(--ink); }
   body { font-size: 11pt; }

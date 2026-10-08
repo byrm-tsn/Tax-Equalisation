@@ -1,11 +1,12 @@
 {% load teq %}
-{# The immigration guidance panel: kept apart from the employment cost, never added to it. #}
+{# The immigration guidance panel: answers first (process, documents, costs, timeline, family),  #}
+{# then the questions that tailor it. Kept apart from the employment cost, never added to it.   #}
 <section id="immigration" class="separate" aria-labelledby="immigration-title">
-  <h2 id="immigration-title">Immigration: {{ panel.title }}</h2>
-  <p><strong>These costs and timings are separate from the employment cost above and are never added to it.</strong>
-    Guidance verified {{ panel.verified_at|uk_date }} (pack {{ panel.pack_id }}, version {{ panel.version }}).</p>
+  <h2 id="immigration-title">Immigration: {{ immigration.title }}</h2>
+  <p><strong>These costs and timings are separate from the employment cost on the Tax tab and are never added to it.</strong>
+    Guidance verified {{ panel.verified_at|uk_date }}.</p>
   {% for warning in panel.warnings %}
-    <p class="flag flag--{{ warning.severity }}"><span class="badge badge--{{ warning.severity }}">{{ warning.severity }}</span> {{ warning.text }} <span class="code">{{ warning.code }}</span></p>
+    <p class="flag flag--{{ warning.severity }}" title="{{ warning.code }}"><span class="badge badge--{{ warning.severity }}">{{ warning.severity }}</span> {{ warning.text }}</p>
   {% endfor %}
 
   {% for note in panel.route_notes %}
@@ -16,63 +17,41 @@
     </div>
   {% endfor %}
 
-  <form class="tailoring" method="get" action="{% url 'estimate' %}" aria-labelledby="tailoring-title">
-    <h3 id="tailoring-title">Tailor this guidance</h3>
-    <input type="hidden" name="s" value="{{ token }}">
-    {% if tailoring_problems %}
-      <div class="error-summary" role="alert">
-        <h2>Some answers could not be used</h2>
-        <ul>{% for problem in tailoring_problems %}<li>{{ problem }}</li>{% endfor %}</ul>
-        <p>The guidance below uses the default answers instead.</p>
-      </div>
-    {% endif %}
-    <div class="grid">
-      {% for q in panel.tailoring.questions %}
-        <div class="field">
-          <label for="tq-{{ q.id }}">{{ q.text }}</label>
-          {% if q.assumed %}<p class="hint">Not answered; assumed: {{ q.value_label }}.</p>{% endif %}
-          {% if q.type == "bool" %}
-            <select id="tq-{{ q.id }}" name="{{ q.id }}">
-              <option value="">Not answered</option>
-              <option value="true"{% if q.answered and q.value is True %} selected{% endif %}>Yes</option>
-              <option value="false"{% if q.answered and q.value is False %} selected{% endif %}>No</option>
-            </select>
-          {% elif q.type == "int" %}
-            <input type="number" id="tq-{{ q.id }}" name="{{ q.id }}" min="{{ q.minimum }}" max="{{ q.maximum }}" value="{% if q.answered %}{{ q.value }}{% endif %}">
-          {% elif q.type == "choice" %}
-            <select id="tq-{{ q.id }}" name="{{ q.id }}">
-              <option value="">Not answered</option>
-              {% for option in q.options %}<option value="{{ option.value }}"{% if q.answered and q.value == option.value %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
-            </select>
-          {% else %}
-            <input type="text" id="tq-{{ q.id }}" name="{{ q.id }}" value="{% if q.answered and q.value %}{{ q.value }}{% endif %}">
-          {% endif %}
-        </div>
-      {% endfor %}
-    </div>
-    <button type="submit">Update the immigration guidance</button>
-  </form>
-
-  <h3>Eligibility</h3>
+  <h3 id="imm-process">Application process</h3>
   <p>{{ panel.eligibility.note }}</p>
+  <h4>What every application needs</h4>
   <ul>
     {% for item in panel.eligibility.general %}<li><strong>{{ item.title }}.</strong> {{ item.text }} <span class="muted">({{ item.verification_label }})</span></li>{% endfor %}
   </ul>
-  {% if panel.eligibility.circumstance_dependent %}
+  {% if immigration.circumstance %}
     <div class="table-wrap">
       <table>
         <caption>Depends on the circumstances</caption>
         <thead><tr><th scope="col">Requirement</th><th scope="col">On these answers</th><th scope="col">Why</th></tr></thead>
         <tbody>
-          {% for item in panel.eligibility.circumstance_dependent %}
+          {% for item in immigration.circumstance %}
             <tr><td><strong>{{ item.title }}</strong><br>{{ item.text }}</td><td>{{ item.status_label }}</td><td>{% if item.why %}{{ item.why }}{% elif item.condition_text %}Only when {{ item.condition_text }}{% endif %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   {% endif %}
+  <h4>The steps, in order</h4>
+  <ol class="stages">
+    {% for stage in immigration.process %}<li><strong>{{ stage.title }}</strong> <span class="muted">({{ stage.who }}; typically {{ stage.time }})</span><br>{{ stage.line }}</li>{% endfor %}
+  </ol>
 
-  <h3>Costs, and who pays</h3>
+  <h3 id="imm-documents">Documents</h3>
+  <ul>
+    {% for document in panel.documents.general %}<li><strong>{{ document.title }}.</strong> {{ document.text }}</li>{% endfor %}
+    {% for document in panel.documents.conditional %}<li><strong>{{ document.title }}.</strong> {{ document.text }} <em>Needed because: {{ document.why_it_applies }}</em></li>{% endfor %}
+  </ul>
+  {% if panel.documents.not_needed %}
+    <p class="muted">Not needed on these answers:
+      {% for document in panel.documents.not_needed %}{{ document.title }} ({{ document.condition_text }}){% if not forloop.last %}; {% endif %}{% endfor %}.</p>
+  {% endif %}
+
+  <h3 id="imm-costs">Costs, and who pays</h3>
   <div class="table-wrap">
     <table>
       <thead><tr><th scope="col">Cost</th><th scope="col">How it is worked out</th><th scope="col" class="num">Amount</th><th scope="col">Payer</th><th scope="col">Verified</th></tr></thead>
@@ -108,12 +87,12 @@
     <p><strong>Funds to show:</strong> {{ panel.maintenance_funds.display }} ({{ panel.maintenance_funds.formula }}). {{ panel.maintenance_funds.text }}</p>
   {% endif %}
 
-  <h3>Timeline: {{ panel.timeline.total_text }}</h3>
+  <h3 id="imm-timeline">Timeline: {{ panel.timeline.total_text }}</h3>
   <p class="muted">{{ panel.timeline.method_note }}</p>
   <p>Critical path: {{ immigration.critical_path_titles|join:" → " }}.</p>
   <div class="table-wrap">
     <table>
-      <thead><tr><th scope="col">Stage</th><th scope="col">Who</th><th scope="col">Typical time</th><th scope="col">After</th><th scope="col">Runs alongside</th></tr></thead>
+      <thead><tr><th scope="col">Stage</th><th scope="col">Who</th><th scope="col">Typical time (an assumption)</th><th scope="col">After</th><th scope="col">Runs alongside</th></tr></thead>
       <tbody>
         {% for stage in immigration.stages %}
           <tr>
@@ -135,40 +114,72 @@
     {% for note in panel.timeline.notes %}<li>{{ note.text }} <span class="muted">({{ note.verification_label }})</span></li>{% endfor %}
   </ul>
 
-  <h3>Documents</h3>
+  <h3 id="imm-family">Family</h3>
   <ul>
-    {% for document in panel.documents.general %}<li><strong>{{ document.title }}.</strong> {{ document.text }}</li>{% endfor %}
-    {% for document in panel.documents.conditional %}<li><strong>{{ document.title }}.</strong> {{ document.text }} <em>Needed because: {{ document.why_it_applies }}</em></li>{% endfor %}
+    {% for item in immigration.family.requirements %}<li><strong>{{ item.title }}.</strong> {{ item.text }}{% if item.status_label %} <span class="muted">({{ item.status_label }}.)</span>{% endif %}</li>{% endfor %}
   </ul>
-  {% if panel.documents.not_needed %}
-    <p class="muted">Not needed on these answers:
-      {% for document in panel.documents.not_needed %}{{ document.title }} ({{ document.condition_text }}){% if not forloop.last %}; {% endif %}{% endfor %}.</p>
-  {% endif %}
-
-  <h3>The employer's responsibilities</h3>
-  <ul>
-    {% for item in panel.employer_responsibilities %}<li><strong>{{ item.title }}.</strong> {{ item.text }}</li>{% endfor %}
-  </ul>
-
-  {% if panel.tailoring.unanswered %}
-    <h3>{{ panel.tailoring.unanswered_heading }}</h3>
-    <ul>
-      {% for question in panel.tailoring.unanswered %}<li><strong>{{ question.text }}</strong> Assumed: {{ question.assumed_value_label }}. {{ question.why_it_matters }}</li>{% endfor %}
-    </ul>
-  {% endif %}
-
-  <details>
-    <summary>Reference pack compared with current guidance</summary>
+  {% if immigration.family.costs %}
     <div class="table-wrap">
       <table>
-        <thead><tr><th scope="col">Topic</th><th scope="col">Reference pack</th><th scope="col">Current position</th><th scope="col">Effect on the tool</th></tr></thead>
+        <caption>Dependants' costs on these answers</caption>
+        <thead><tr><th scope="col">Cost</th><th scope="col">How it is worked out</th><th scope="col" class="num">Amount</th><th scope="col">Payer</th></tr></thead>
         <tbody>
-          {% for row in panel.pack_vs_current_guidance %}
-            <tr><td>{{ row.topic }}</td><td>{{ row.reference_pack }}</td><td>{{ row.current_position }} <span class="muted">({{ row.verification_label }})</span></td><td>{{ row.effect_on_tool }}</td></tr>
+          {% for line in immigration.family.costs %}
+            <tr><td>{{ line.label }}</td><td>{{ line.formula }}</td><td class="num">{{ line.display }}</td><td>{{ line.payer_label }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+  {% else %}
+    <p>No partner or children are applying as dependants on these answers, so no dependants' fees or health surcharge are included. Tailor the guidance below to add them.</p>
+  {% endif %}
+  {% if immigration.family.funds.applies %}
+    <p><strong>Funds to show on these answers:</strong> {{ immigration.family.funds.display }} ({{ immigration.family.funds.formula }}), held for {{ immigration.family.funds.days_held }} consecutive days before applying.</p>
+  {% endif %}
+
+  <h3 id="imm-employer">The employer's responsibilities</h3>
+  <ul>
+    {% for item in panel.employer_responsibilities %}<li><strong>{{ item.title }}.</strong> {{ item.text }}</li>{% endfor %}
+  </ul>
+
+  <details class="tailoring"{% if immigration.tailoring_open or tailoring_problems %} open{% endif %}>
+    <summary>{{ immigration.tailoring_summary }}</summary>
+    <form method="get" action="{% url 'estimate' %}" aria-label="Tailor this guidance">
+      <input type="hidden" name="s" value="{{ token }}">
+      <input type="hidden" name="tab" value="immigration">
+      {% if tailoring_problems %}
+        <div class="error-summary" role="alert">
+          <h2>Some answers could not be used</h2>
+          <ul>{% for problem in tailoring_problems %}<li>{{ problem }}</li>{% endfor %}</ul>
+          <p>The guidance above uses the default answers instead.</p>
+        </div>
+      {% endif %}
+      <div class="grid">
+        {% for q in panel.tailoring.questions %}
+          <div class="field">
+            <label for="tq-{{ q.id }}">{{ q.text }}</label>
+            {% if q.assumed %}<p class="hint">Not answered; assumed: {{ q.value_label }}.</p>{% endif %}
+            {% if q.type == "bool" %}
+              <select id="tq-{{ q.id }}" name="{{ q.id }}">
+                <option value="">Not answered</option>
+                <option value="true"{% if q.answered and q.value is True %} selected{% endif %}>Yes</option>
+                <option value="false"{% if q.answered and q.value is False %} selected{% endif %}>No</option>
+              </select>
+            {% elif q.type == "int" %}
+              <input type="number" id="tq-{{ q.id }}" name="{{ q.id }}" min="{{ q.minimum }}" max="{{ q.maximum }}" value="{% if q.answered %}{{ q.value }}{% endif %}">
+            {% elif q.type == "choice" %}
+              <select id="tq-{{ q.id }}" name="{{ q.id }}">
+                <option value="">Not answered</option>
+                {% for option in q.options %}<option value="{{ option.value }}"{% if q.answered and q.value == option.value %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+              </select>
+            {% else %}
+              <input type="text" id="tq-{{ q.id }}" name="{{ q.id }}" value="{% if q.answered and q.value %}{{ q.value }}{% endif %}">
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <button type="submit">Update the immigration guidance</button>
+    </form>
   </details>
 
   <details>

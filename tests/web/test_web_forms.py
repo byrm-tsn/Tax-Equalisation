@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -359,3 +361,68 @@ def test_the_exchange_rate_prefills_as_entered(client: Client, form_data: dict[s
     location = _submit(client, form_data)["Location"]
     html = client.get("/", {"s": location.split("s=", 1)[1]}).content.decode()
     assert 'name="fx_rate" value="55.25"' in html
+
+
+def test_a_fresh_form_calculates_the_hypothetical_tax_from_an_indicative_rate(
+    client: Client,
+) -> None:
+    html = client.get("/").content.decode()
+    assert 'name="hypo_method" value="CALCULATED" id="id_hypo_method_1" required checked' in html
+    assert 'value="OVERRIDE" id="id_hypo_method_0" required checked' not in html
+    assert 'name="fx_rate" value="65.7"' in html
+    assert 'name="fx_date" value="2026-09-15"' in html
+    assert 'name="fx_source" value="indicative"' in html
+    assert "an indicative mid-September 2026 rate" in html
+    assert "confirm it" in html
+
+
+def test_an_edit_link_keeps_its_own_method_and_rate(client: Client, reference_token: str) -> None:
+    # The reference example supplies its hypothetical tax and carries no rate.
+    html = client.get("/", {"s": reference_token}).content.decode()
+    assert 'value="OVERRIDE" id="id_hypo_method_0" required checked' in html
+    assert 'name="fx_rate" value="65.7"' not in html
+    assert "indicative mid-September 2026 rate" not in html
+
+
+def test_the_indicative_defaults_match_the_form() -> None:
+    from teq_web.scenarios.defaults import indicative_fx_initial, indicative_fx_snapshot
+
+    snapshot = indicative_fx_snapshot()
+    assert snapshot.rate == Decimal("65.7")
+    assert snapshot.as_of == date(2026, 9, 15)
+    assert snapshot.source == "indicative"
+    assert indicative_fx_initial() == {
+        "fx_rate": "65.7",
+        "fx_date": date(2026, 9, 15),
+        "fx_source": "indicative",
+    }
+
+
+def test_the_fresh_form_defaults_submit_a_calculated_scenario(
+    client: Client, form_data: dict[str, str]
+) -> None:
+    form_data |= {
+        "hypo_method": "CALCULATED",
+        "hypo_override": "",
+        "fx_rate": "65.7",
+        "fx_date": "2026-09-15",
+        "fx_source": "indicative",
+    }
+    response = _submit(client, form_data)
+    assert response.status_code == 303
+    inputs, _ = decode_scenario(response["Location"].split("s=", 1)[1])
+    assert inputs.hypothetical_tax.method.value == "CALCULATED"
+    assert inputs.hypothetical_tax.override is None
+    assert inputs.fx is not None
+    assert inputs.fx.rate == Decimal("65.7")
+    assert inputs.fx.source == "indicative"
+    page = client.get(response["Location"]).content.decode()
+    assert "Hypothetical tax supplied" not in page
+
+
+def test_the_housing_field_names_the_rent_or_value(client: Client) -> None:
+    html = client.get("/").content.decode()
+    assert (
+        '<label for="id_housing_amount">Housing provided by the employer (annual rent or value)'
+        "</label>"
+    ) in html

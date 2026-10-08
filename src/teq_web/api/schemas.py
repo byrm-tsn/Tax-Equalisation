@@ -88,7 +88,7 @@ class Note(BaseModel):
 
 
 class EstimateResponse(CalculationResult):
-    """The calculation result, plus the narrative and immigration panel when requested.
+    """The calculation result, plus the narratives and immigration panel when requested.
 
     ``trace`` is omitted when ``include_trace`` is false; ``notes`` is present only when
     there is something to note (for example a link made under another engine version).
@@ -100,6 +100,11 @@ class EstimateResponse(CalculationResult):
     )
     narrative: list[str] | None = None
     immigration: dict[str, Any] | None = None
+    immigration_narrative: list[str] | None = Field(
+        default=None,
+        description="Plain-English paragraphs on the immigration side; present when "
+        "include_immigration is true.",
+    )
     notes: list[Note] | None = None
 
 

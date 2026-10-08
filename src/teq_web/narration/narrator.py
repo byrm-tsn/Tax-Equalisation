@@ -7,12 +7,18 @@ implement the same :class:`Narrator` protocol and be held to the same check.
 
 Claims are conditional on the figures: a charge is mentioned only when its line is
 non-zero in the year described, and items are placed in the years they are paid in.
+
+:meth:`TemplateNarrator.narrate_immigration` does the same for the immigration guidance
+panel: it reads only the panel (plain data from :mod:`teq_guidance`), and every number it
+states is one the panel holds (:func:`teq_web.narration.figures.unknown_panel_numbers`).
 """
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
-from typing import Final, Protocol
+from typing import Any, Final, Protocol
 
 from teq_engine import CalculationResult, LineCode, Treatment, YearResult
 from teq_engine.types import ItemResult
@@ -255,7 +261,8 @@ class TemplateNarrator:
                 "Because the employer pays the employee's UK tax, that payment is itself "
                 "taxable pay, so tax is due on the tax. The gross pay is therefore the "
                 f"figure that leaves exactly the net guarantee after {after}, and the tool "
-                "solves for it exactly rather than by trial and error."
+                "finds that figure exactly and checks it against the step-by-step iteration "
+                "the reference pack describes."
             )
         else:
             text = (
@@ -469,3 +476,243 @@ class TemplateNarrator:
             "trace shows each step."
         )
         return text
+
+    # ------------------------------------------------------------------ immigration
+
+    def narrate_immigration(self, panel: Mapping[str, Any]) -> list[str]:
+        """Four paragraphs on the immigration side, from the guidance panel only.
+
+        The employer's part first, then the application and how long it takes, then the
+        costs and who pays them, then family. Never computes a figure: amounts, ranges
+        and totals are quoted as the panel displays them.
+        """
+        return [
+            self._imm_employer(panel),
+            self._imm_application(panel),
+            self._imm_costs(panel),
+            self._imm_family(panel),
+        ]
+
+    def _imm_employer(self, panel: Mapping[str, Any]) -> str:
+        stages = {stage["id"]: stage for stage in panel["timeline"]["stages"]}
+        requirements = {item["id"]: item for item in panel["eligibility"]["general"]}
+        licence = stages.get("sponsor_licence")
+        if licence is not None:
+            text = (
+                "The employer moves first. It does not yet hold a sponsor licence, so it "
+                f"applies for one (typically {licence['range_text']}), then defines the job "
+                "and assigns a Certificate of Sponsorship."
+            )
+        else:
+            text = (
+                "The employer moves first. It already holds a sponsor licence, so it defines "
+                "the job and assigns a Certificate of Sponsorship, whose reference number the "
+                "employee quotes in the application."
+            )
+        occupation = requirements.get("eligible_occupation_rqf6")
+        salary = requirements.get("salary_threshold")
+        conditions = []
+        if occupation is not None:
+            conditions.append(f"be an {_lower_title(occupation['title'])} (graduate level)")
+        if salary is not None:
+            threshold = re.search(r"£[\d,]+(?:\.\d+)?", str(salary["text"]))
+            floor = (
+                f"at least {threshold.group(0)} a year" if threshold else "at least the threshold"
+            )
+            conditions.append(
+                f"pay a guaranteed basic salary of {floor} or the occupation's going rate, "
+                "whichever is higher"
+            )
+        if conditions:
+            text += (
+                f" The job must {_join(conditions)}; allowances such as housing and the "
+                "cost-of-living allowance do not count towards it."
+            )
+        return text
+
+    def _imm_application(self, panel: Mapping[str, Any]) -> str:
+        timeline = panel["timeline"]
+        stages = {stage["id"]: stage for stage in timeline["stages"]}
+        where = _answer_label(panel, "application_location")
+        text = "The employee then applies online"
+        if where:
+            text += f" from {_lower_first(where)}"
+        text += ", quoting the certificate's reference number"
+        if "application_and_biometrics" in stages:
+            text += ", and gives fingerprints and a photograph at a visa application centre"
+        text += "."
+        documents = [_with_article(doc["title"]) for doc in panel["documents"]["conditional"]]
+        if documents:
+            text += (
+                " Besides a valid passport, on these answers the application needs "
+                f"{_join_items(documents)}."
+            )
+        decision = next(
+            (stage for stage in timeline["stages"] if stage["actor"] == "HOME_OFFICE"), None
+        )
+        if decision is not None:
+            text += f" The Home Office decision typically takes {decision['range_text']}."
+        text += (
+            " From the first step to starting work the whole process takes "
+            f"{timeline['total_text']}: a typical range, not a date."
+        )
+        return text
+
+    def _imm_costs(self, panel: Mapping[str, Any]) -> str:
+        costs = panel["costs"]
+        display = costs["subtotals_display"]
+        lines = costs["lines"]
+        employer = [
+            _cost_phrase(line)
+            for line in lines
+            if line["payer"] == "EMPLOYER" and line["in_subtotal"]
+        ]
+        text = f"The employer must pay {display['employer_mandatory']} itself"
+        if employer:
+            text += f": {_join(employer)}"
+        text += ". It cannot pass these to the employee."
+        policy = list(
+            dict.fromkeys(
+                _with_article(_base_label(line["label"]))
+                for line in lines
+                if line["payer"] == "EITHER_BY_POLICY" and line["in_subtotal"]
+            )
+        )
+        if policy:
+            text += (
+                f" The applicant's own fees come to {display['applicant_side']} "
+                f"({_join(policy)}), which many employers pay by policy."
+            )
+        separate = [
+            f"{_with_article(_base_label(line['label']))} ({line['display']})"
+            for line in lines
+            if not line["in_subtotal"] and not _not_held(line)
+        ]
+        if separate:
+            text += f" The applicant also pays {_join(separate)}, listed separately."
+        missing = [_with_article(line["label"]) for line in lines if _not_held(line)]
+        if missing:
+            text += (
+                f" The amount for {_join(missing)} is not held by this tool: check it on GOV.UK."
+            )
+        text += " None of these immigration costs is included in the employment cost."
+        return text
+
+    def _imm_family(self, panel: Mapping[str, Any]) -> str:
+        adults = _answer_value(panel, "dependants_adults") or 0
+        children = _answer_value(panel, "dependants_children") or 0
+        lines = [
+            _cost_phrase(line)
+            for line in panel["costs"]["lines"]
+            if line["basis"] in _DEPENDANT_BASES
+        ]
+        if not adults and not children:
+            return (
+                "No partner or children are applying as dependants on these answers. A "
+                "partner and children under 18 can come as dependants, each with their own "
+                "application fee and health surcharge, and, unless the sponsor certifies "
+                "maintenance, further funds to show; tailor the guidance to add them."
+            )
+        who = []
+        if adults:
+            who.append("a partner")
+        if children:
+            who.append(f"{_number_word(children)} child{'ren' if children != 1 else ''}")
+        if adults + children == 1:
+            text = (
+                f"{_capitalise(_join(who))} is applying as a dependant, paying their own "
+                "application fee and health surcharge"
+            )
+        else:
+            text = (
+                f"{_capitalise(_join(who))} are applying as dependants, each paying their "
+                "own application fee and health surcharge"
+            )
+        text += f": {_join(lines)}." if lines else "."
+        funds = panel["maintenance_funds"]
+        if funds.get("applies"):
+            text += (
+                f" The funds to show rise to {funds['display']} ({funds['formula']}), held for "
+                f"{funds['days_held']} consecutive days before applying."
+            )
+        return text
+
+
+_DEPENDANT_BASES: Final = frozenset(
+    {
+        "PER_ADULT_DEPENDANT",
+        "PER_CHILD_DEPENDANT",
+        "PER_DEPENDANT_VISA_YEAR_ADULT",
+        "PER_DEPENDANT_VISA_YEAR_CHILD",
+    }
+)
+
+
+def _questions(panel: Mapping[str, Any]) -> Sequence[Mapping[str, Any]]:
+    questions: Sequence[Mapping[str, Any]] = panel["tailoring"]["questions"]
+    return questions
+
+
+def _answer_value(panel: Mapping[str, Any], question_id: str) -> Any:
+    return next((q["value"] for q in _questions(panel) if q["id"] == question_id), None)
+
+
+def _answer_label(panel: Mapping[str, Any], question_id: str) -> str:
+    return next((str(q["value_label"]) for q in _questions(panel) if q["id"] == question_id), "")
+
+
+def _lower_first(text: str) -> str:
+    return text[:1].lower() + text[1:]
+
+
+def _lower_title(title: str) -> str:
+    """A title inside a sentence: ``Eligible occupation at RQF level 6`` -> ``eligible ...``.
+
+    The first letter is kept for an abbreviation (``TB test``), a proper adjective
+    (``English language test``) and a proper name, whose next word other than ``of``,
+    ``and`` or ``for`` is capitalised (``Certificate of Sponsorship fee``,
+    ``Immigration Skills Charge``).
+    """
+    words = title.split()
+    if not words or words[0].isupper() or words[0] in _PROPER_WORDS:
+        return title
+    following = [word for word in words[1:] if word not in ("of", "and", "for")]
+    if following and following[0][:1].isupper():
+        return title
+    return _lower_first(title)
+
+
+_PROPER_WORDS: Final = frozenset({"English", "Turkish", "British", "Home"})
+
+
+def _join_items(parts: list[str]) -> str:
+    """Like ``_join``, but with semicolons when an item holds a comma of its own."""
+    if len(parts) > 1 and any("," in part for part in parts):
+        return "; ".join(parts[:-1]) + "; and " + parts[-1]
+    return _join(parts)
+
+
+def _not_held(line: Mapping[str, Any]) -> bool:
+    """A cost line whose amount the pack does not hold (shown as "Not held")."""
+    return line.get("amount") is None and line.get("amount_min") is None
+
+
+def _cost_phrase(line: Mapping[str, Any]) -> str:
+    """``the Immigration Skills Charge of £2,640``; a fee not held says so."""
+    if _not_held(line):
+        return f"{_with_article(line['label'])} (not held by this tool; check it on GOV.UK)"
+    return f"{_with_article(line['label'])} of {line['display']}"
+
+
+def _with_article(title: str) -> str:
+    """``the`` and the title as it reads inside a sentence."""
+    return f"the {_lower_title(title)}"
+
+
+def _base_label(label: str) -> str:
+    """A cost label without its bracketed qualifier: ``Visa application fee (main ...)``."""
+    return re.sub(r"\s*\([^)]*\)$", "", label)
+
+
+def _number_word(count: int) -> str:
+    return _NUMBER_WORDS.get(count, str(count))
