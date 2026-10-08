@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Annotated, Any, Final, Literal
 
 from pydantic import (
@@ -37,9 +39,11 @@ from teq_engine.money import PENNY, MoneyTypeError, engine_context, to_decimal
 from teq_engine.treatments import ItemKind, NicClass, Treatment, default_treatment
 
 __all__ = [
+    "DEFAULT_REGIONS",
     "MAX_AMOUNT",
     "MAX_ITEMS",
     "MAX_YEARS",
+    "AllocationLine",
     "Assignment",
     "Assumption",
     "Assumptions",
@@ -82,8 +86,14 @@ __all__ = [
 ]
 
 MAX_AMOUNT: Final = Decimal("1000000000")
-"""Upper bound for any single input amount (one billion), a sanity limit."""
+"""Upper bound for any single amount (one billion), a sanity limit. It applies to every
+amount as entered and to every amount the engine derives from one by annualising a monthly
+figure or converting at the FX snapshot."""
 MAX_FX_RATE: Final = Decimal("100000")
+_ZERO_MONEY: Final = Decimal("0.00")
+
+DEFAULT_REGIONS: Final[Mapping[str, str]] = MappingProxyType({"GB": "ENG"})
+"""The region a host country defaults to when none is given (England for GB)."""
 MAX_ITEMS: Final = 50
 MAX_YEARS: Final = 10
 
@@ -114,7 +124,7 @@ def _coerce_money(value: object) -> Decimal:
     if abs(amount) > MAX_AMOUNT:
         raise PydanticCustomError("money_range", "amounts must not exceed one billion")
     with engine_context():
-        canonical = amount.quantize(PENNY)
+        canonical = amount.quantize(PENNY, rounding=ROUND_HALF_UP)
     if canonical != amount:
         raise PydanticCustomError("money_precision", "amounts may have at most two decimal places")
     return canonical
@@ -126,7 +136,7 @@ def _coerce_fx_rate(value: object) -> Decimal:
     if abs(rate) > MAX_FX_RATE:
         raise PydanticCustomError("fx_range", "exchange rates must not exceed 100000")
     with engine_context():
-        canonical = rate.quantize(Decimal("0.000001"))
+        canonical = rate.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
     if canonical != rate:
         raise PydanticCustomError(
             "fx_precision", "exchange rates may have at most six decimal places"
@@ -344,6 +354,10 @@ class Assumptions(_Frozen):
     owr_claimed: bool = False
 
 
+_RELOCATION_TREATMENTS: Final = frozenset({Treatment.EXEMPT_CAPPED, Treatment.TAXABLE_BIK})
+"""The only treatments a relocation item may take: anything else would escape the cap."""
+
+
 def _rule(loc: tuple[str | int, ...], message: str, value: object) -> InitErrorDetails:
     return InitErrorDetails(
         type=PydanticCustomError("scenario_rule", message),
@@ -489,6 +503,16 @@ class ScenarioInput(_Frozen):
                         str(treatment),
                     )
                 )
+            if item.kind is ItemKind.RELOCATION and treatment not in _RELOCATION_TREATMENTS:
+                errors.append(
+                    _rule(
+                        (*loc, "treatment"),
+                        "a relocation item must be EXEMPT_CAPPED (exempt up to the per-move "
+                        f"cap, any excess taxable) or TAXABLE_BIK, not {treatment.value}: "
+                        "relocation is exempt only within the cap",
+                        str(treatment),
+                    )
+                )
             if item.employee_contribution is not None:
                 if treatment is not Treatment.TAXABLE_BIK:
                     errors.append(
@@ -507,33 +531,133 @@ class ScenarioInput(_Frozen):
                         )
                     )
 
+        errors.extend(self._amount_limit_errors())
         if errors:
             raise ValidationError.from_exception_data("ScenarioInput", errors)
         return self
 
+    def _amount_limit_errors(self) -> list[InitErrorDetails]:
+        """Every annualised or converted amount must respect ``MAX_AMOUNT``, as an entered
+        one does: the annual salary in GBP and in TRY (when an FX snapshot converts it),
+        each item's annual amount and employee contribution, and the TRY value of each
+        gross-equalised item that enters the Turkish base."""
+        errors: list[InitErrorDetails] = []
+        limit = "one billion"
+        salary = self.salary
+        with engine_context():
+            annual = salary.annual_amount
+            if annual > MAX_AMOUNT:
+                errors.append(
+                    _rule(
+                        ("salary", "amount"),
+                        f"the annual salary ({annual} {salary.currency.value}) must not exceed "
+                        f"{limit}",
+                        str(salary.amount),
+                    )
+                )
+            elif self.fx is not None:
+                if salary.currency is Currency.TRY:
+                    converted, other = self.annual_salary_gbp(), Currency.GBP
+                else:
+                    converted, other = self.annual_salary_try() or _ZERO_MONEY, Currency.TRY
+                if converted > MAX_AMOUNT:
+                    errors.append(
+                        _rule(
+                            ("salary", "amount"),
+                            f"the annual salary converts to {converted} {other.value} at the "
+                            f"FX snapshot rate, which must not exceed {limit}",
+                            str(salary.amount),
+                        )
+                    )
+            converts_items = self.fx is not None and (
+                (
+                    self.hypothetical_tax.method is HypoTaxMethod.CALCULATED
+                    and self.hypothetical_tax.base is HypoTaxBase.ALL_EQUALISED
+                )
+                or self.assumptions.social_security is SocialSecurityMode.HOME_SCHEME_AGREEMENT
+            )
+            for index, item in enumerate(self.items):
+                loc: tuple[str | int, ...] = ("items", index)
+                if item.annual_amount > MAX_AMOUNT:
+                    errors.append(
+                        _rule(
+                            (*loc, "amount"),
+                            f"the annual amount ({item.annual_amount} GBP) must not exceed {limit}",
+                            str(item.amount),
+                        )
+                    )
+                elif (
+                    converts_items
+                    and self.fx is not None
+                    and item.effective_treatment is Treatment.GROSS_EQUALISED
+                    and item.annual_amount * self.fx.rate > MAX_AMOUNT
+                ):
+                    errors.append(
+                        _rule(
+                            (*loc, "amount"),
+                            f"the item converts to {item.annual_amount * self.fx.rate} TRY a "
+                            f"year at the FX snapshot rate, which must not exceed {limit}",
+                            str(item.amount),
+                        )
+                    )
+                if item.annual_employee_contribution > MAX_AMOUNT:
+                    errors.append(
+                        _rule(
+                            (*loc, "employee_contribution"),
+                            f"the annual employee contribution "
+                            f"({item.annual_employee_contribution} GBP) must not exceed {limit}",
+                            str(item.employee_contribution),
+                        )
+                    )
+        return errors
+
     def annual_salary_gbp(self) -> Decimal:
-        """The annual salary in GBP; a TRY salary converts at the FX snapshot (2 dp)."""
+        """The annual salary in GBP; a TRY salary converts at the FX snapshot.
+
+        The conversion rounds half-up to the penny (``ROUND_HALF_UP``), whatever the
+        engine context's default rounding.
+        """
         annual = self.salary.annual_amount
         if self.salary.currency is Currency.GBP:
             return annual
         if self.fx is None:
             raise ValueError("a TRY salary needs an FX snapshot")
         with engine_context():
-            return (annual / self.fx.rate).quantize(PENNY)
+            return (annual / self.fx.rate).quantize(PENNY, rounding=ROUND_HALF_UP)
 
     def annual_salary_try(self) -> Decimal | None:
-        """The annual salary in TRY: as entered, or converted from GBP at the snapshot."""
+        """The annual salary in TRY: as entered, or converted from GBP at the snapshot.
+
+        The conversion rounds half-up to the kuruş (``ROUND_HALF_UP``).
+        """
         annual = self.salary.annual_amount
         if self.salary.currency is Currency.TRY:
             return annual
         if self.fx is None:
             return None
         with engine_context():
-            return (annual * self.fx.rate).quantize(PENNY)
+            return (annual * self.fx.rate).quantize(PENNY, rounding=ROUND_HALF_UP)
 
     def canonical_json(self) -> str:
-        """Canonical JSON: sorted keys, no whitespace, decimals as strings."""
-        return canonical_json(self.model_dump(mode="json"))
+        """Canonical JSON: sorted keys, no whitespace, decimals as strings.
+
+        Inputs that calculate identically serialise identically:
+
+        * amounts are canonical two-decimal strings and negative zero never survives
+          coercion (``"-0"``, ``"0"`` and ``"0.00"`` are all ``"0.00"``);
+        * a missing route region becomes the host's default region (``ENG`` for GB),
+          which is the region the calculation uses;
+        * an item's ``years`` list is sorted. Repeated years are refused by validation,
+          so the sorted list is also free of duplicates.
+        """
+        data = self.model_dump(mode="json")
+        route = data["route"]
+        if route.get("region") is None:
+            route["region"] = DEFAULT_REGIONS.get(route["host"])
+        for item in data["items"]:
+            if isinstance(item["years"], list):
+                item["years"] = sorted(item["years"])
+        return canonical_json(data)
 
     def inputs_hash(self) -> str:
         """``sha256:<hex>`` over :meth:`canonical_json`."""
@@ -637,7 +761,15 @@ class HypoTaxResult(_Frozen):
 
 
 class NetGuarantee(_Frozen):
-    """The net cash the employee is promised for a year (all GBP)."""
+    """The net cash the employee is promised for a year (all GBP).
+
+    ``hypothetical_tax`` is everything charged for the year: the tax on salary
+    (``hypothetical_tax_on_salary``) plus the share charged on gross-equalised items such
+    as a bonus (``hypothetical_tax_on_equalised_items``). The share is zero when the
+    hypothetical tax base is salary only. ``net_salary = salary + equalised_items -
+    hypothetical_tax``. The two split fields are ``None`` only on results stored before
+    they existed.
+    """
 
     salary: Dec
     equalised_items: Dec
@@ -645,6 +777,8 @@ class NetGuarantee(_Frozen):
     net_salary: Dec
     net_allowances: Dec
     net_cash_target: Dec
+    hypothetical_tax_on_salary: Dec | None = None
+    hypothetical_tax_on_equalised_items: Dec | None = None
 
 
 class GrossUpResult(_Frozen):
@@ -674,8 +808,26 @@ class Decomposition(_Frozen):
     foots: bool
 
 
+class AllocationLine(_Frozen):
+    """One treatment line of an item in one assignment year (GBP, unrounded)."""
+
+    treatment: Treatment
+    display_label: str
+    nic_class: NicClass | None
+    amount: Dec
+
+
 class ItemAllocation(_Frozen):
-    """How one item lands in one assignment year (GBP, unrounded)."""
+    """How one item lands in one assignment year (GBP, unrounded).
+
+    ``hypothetical_tax_share`` is set for gross-equalised items only: the hypothetical
+    tax charged on the item that year (zero when the base is salary only).
+
+    ``lines`` is set for a relocation item under the per-move cap: two lines every year
+    it is paid, the part exempt within the cap (``EXEMPT_CAPPED``) and the excess taxed
+    as a benefit in kind with Class 1A (``TAXABLE_BIK``, zero within the cap). They add
+    up to ``amount``.
+    """
 
     assignment_year: StrictInt
     amount: Dec
@@ -684,6 +836,8 @@ class ItemAllocation(_Frozen):
     taxable_benefit: Dec
     benefit_cost: Dec
     exempt: Dec
+    hypothetical_tax_share: Dec | None = None
+    lines: tuple[AllocationLine, ...] = ()
 
 
 class ItemResult(_Frozen):
@@ -765,7 +919,22 @@ class ProvenanceEntry(_Frozen):
 
 
 class CalculationResult(_Frozen):
-    """The complete, reproducible result of one calculation (plan Appendix A)."""
+    """The complete, reproducible result of one calculation (plan Appendix A).
+
+    Identity fields:
+
+    * ``inputs_hash``: ``sha256`` over the canonical inputs (see
+      :meth:`ScenarioInput.canonical_json`).
+    * ``rate_set_fingerprint``: ``sha256`` over the sorted ``(id, content checksum)``
+      pairs of the rate sets actually used, so a figure changed under an unchanged
+      identifier changes the fingerprint.
+    * ``cache_key``: ``sha256`` over ``inputs_hash``, ``rate_set_fingerprint``,
+      ``engine_version`` and ``rates_as_of``. Two results with the same cache key are
+      identical; **a cache or de-duplication must key on this**, never on
+      ``inputs_hash`` alone (the same inputs give a different result under another
+      rates date, other rate figures or another engine version). ``None`` only on a
+      result stored before the field existed.
+    """
 
     schema_version: Literal["1"] = "1"
     engine_version: str
@@ -775,6 +944,7 @@ class CalculationResult(_Frozen):
     rate_set_fingerprint: str
     period_mode: PeriodMode
     inputs_hash: str
+    cache_key: str | None = None
     currency: Literal["GBP"] = "GBP"
     rounding: RoundingBlock
     route: Route

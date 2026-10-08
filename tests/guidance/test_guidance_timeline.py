@@ -168,3 +168,90 @@ def test_parallel_structure(pack: GuidancePack, reference: TailoringAnswers) -> 
     }
     application = _stage(result, "application_and_biometrics")
     assert application.parallel_with == ()  # type: ignore[attr-defined]
+
+
+# --------------------------------------------------------------------------- pass-through
+
+
+def _synthetic_chain_pack(raw_pack: dict[str, object]) -> GuidancePack:
+    """A pack whose timeline is the chain first -> middle -> last, plus a side stage
+    that also waits for the middle one; ``middle`` applies only without a licence."""
+    from teq_guidance import parse_pack
+
+    template = {
+        "actor": "EMPLOYER",
+        "verification": "from_knowledge",
+        "sources": ["gov_sw_your_job"],
+    }
+    raw_pack["stages"] = [
+        {
+            **template,
+            "id": "first",
+            "title": "First",
+            "description": "First.",
+            "depends_on": [],
+            "typical_days_min": 10,
+            "typical_days_max": 20,
+        },
+        {
+            **template,
+            "id": "middle",
+            "title": "Middle",
+            "description": "Middle.",
+            "depends_on": ["first"],
+            "typical_days_min": 5,
+            "typical_days_max": 7,
+            "condition": {"question": "sponsor_licence_held", "equals": False},
+        },
+        {
+            **template,
+            "id": "short",
+            "title": "Short",
+            "description": "Short.",
+            "depends_on": [],
+            "typical_days_min": 1,
+            "typical_days_max": 2,
+        },
+        {
+            **template,
+            "id": "last",
+            "title": "Last",
+            "description": "Last.",
+            "depends_on": ["middle", "short"],
+            "typical_days_min": 3,
+            "typical_days_max": 4,
+        },
+    ]
+    return parse_pack(raw_pack, expected_route="TR-GB")
+
+
+def test_a_stage_that_does_not_apply_passes_its_dependencies_through(
+    raw_pack: dict[str, object], reference: TailoringAnswers
+) -> None:
+    pack = _synthetic_chain_pack(raw_pack)
+    # Licence held: "middle" does not apply, so "last" must still wait for "first".
+    result = critical_path(pack, reference)
+    by_id = {stage.id: stage for stage in result.stages}
+    assert "middle" not in by_id
+    assert by_id["last"].depends_on == ("first", "short")
+    assert by_id["last"].earliest_start_max == 20
+    assert (result.total_days_min, result.total_days_max) == (13, 24)
+    assert result.critical_path == ("first", "last")
+    assert "first" not in by_id["last"].parallel_with
+    assert result.phases == (("first", "short"), ("last",))
+    # Without a licence the chain is whole and "middle" is on the critical path.
+    whole = critical_path(pack, dataclasses.replace(reference, sponsor_licence_held=False))
+    assert {stage.id: stage for stage in whole.stages}["last"].depends_on == ("middle", "short")
+    assert (whole.total_days_min, whole.total_days_max) == (18, 31)
+    assert whole.critical_path == ("first", "middle", "last")
+
+
+def test_inherited_dependencies_already_implied_are_not_repeated(
+    pack: GuidancePack, reference: TailoringAnswers
+) -> None:
+    # decision_inside_uk does not apply; travel_and_start would inherit
+    # application_and_biometrics from it, but that is already implied through
+    # decision_outside_uk, so the shown dependencies are unchanged.
+    result = critical_path(pack, reference)
+    travel = _stage(result, "travel_and_start")
+    assert travel.depends_on == ("decision_outside_uk",)  # type: ignore[attr-defined]

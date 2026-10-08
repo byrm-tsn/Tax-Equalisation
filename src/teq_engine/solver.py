@@ -4,8 +4,14 @@
 
 ``BIK`` is the cash equivalent of the year's taxable benefits; it enters the income-tax
 base but not employee NICs. ``net(G)`` is continuous, piecewise linear and strictly
-increasing (worst slope 0.38 in the allowance taper band with 2% NICs), so the solution
-is unique.
+increasing, because every marginal rate is below 100%, so the solution is unique. The
+worst segment is the personal-allowance taper band with 8% NICs: taxable benefits large
+enough to push total income into the taper band while cash pay is still below the upper
+earnings limit. There the marginal rate is 60% income tax (40% x 1.5) plus 8% employee
+NICs = 68%, so the slope of ``net`` is 0.32; on every other segment it is steeper (for
+example 0.38 in the taper band once cash is above the limit and NICs are 2%, 0.53 at the
+45% rate). Rate-set validation refuses any effective income-tax rate at or above 100%,
+which keeps every slope positive.
 
 **Primary method: exact segment solve.** Breakpoints in gross-cash space are the
 income-tax breakpoints in total-income space (allowance threshold, band edges mapped
@@ -28,13 +34,13 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Final, Literal
 
 from teq_engine.errors import SolverError
 from teq_engine.jurisdictions.gb.income_tax import income_tax, total_income_breakpoints
 from teq_engine.jurisdictions.gb.nic import employee_breakpoints, employee_nic
-from teq_engine.money import ZERO, engine_context, in_engine_context
+from teq_engine.money import MICRO, ZERO, engine_context, in_engine_context
 from teq_engine.piecewise import (
     SegmentSolveError,
     bisect_increasing,
@@ -129,8 +135,8 @@ def _segment_rates(
     width = top - lower
     it_rate = (problem.income_tax_on(top) - problem.income_tax_on(lower)) / width
     nic_rate = (problem.employee_nic_on(top) - problem.employee_nic_on(lower)) / width
-    it_rate = Decimal(fmt_rate(it_rate.quantize(Decimal("0.000001"))))
-    nic_rate = Decimal(fmt_rate(nic_rate.quantize(Decimal("0.000001"))))
+    it_rate = Decimal(fmt_rate(it_rate.quantize(MICRO, rounding=ROUND_HALF_UP)))
+    nic_rate = Decimal(fmt_rate(nic_rate.quantize(MICRO, rounding=ROUND_HALF_UP)))
     rates = problem.income_tax_rates
     middle_income = (lower + top) / 2 + problem.benefits
     taper = " (allowance taper)" if rates.taper_start < middle_income < rates.taper_end else ""

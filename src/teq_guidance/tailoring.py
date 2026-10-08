@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from types import MappingProxyType
-from typing import get_type_hints
+from typing import Final, get_type_hints
 
 from teq_guidance.loader import answer_fits
 from teq_guidance.model import (
@@ -32,6 +32,15 @@ from teq_guidance.model import (
     Stage,
 )
 
+MONTHS_PER_YEAR: Final = 12
+
+REFINEMENT_FIELDS: Final = frozenset({"visa_length_months"})
+"""``TailoringAnswers`` fields that refine a pack question rather than being one.
+
+``visa_length_months`` refines ``visa_length_years``: it is not shown as a question of
+its own, and when it is given the years question takes ``ceil(months / 12)``.
+"""
+
 
 class TailoringError(ValueError):
     """An answer is the wrong type or outside the allowed values."""
@@ -48,6 +57,11 @@ class TailoringAnswers:
     ``None`` means "not answered": the pack's ``assumed_if_unanswered`` value is
     used for the calculation, and the panel lists the question under what would
     be needed to tailor the guidance further, together with the assumption made.
+
+    ``visa_length_months`` is optional and refines ``visa_length_years`` for a part
+    year (30 months is two and a half years). When it is absent the length is
+    ``12 x visa_length_years``. When both are given they must agree:
+    ``visa_length_years`` must equal ``ceil(visa_length_months / 12)``.
     """
 
     visa_length_years: int | None = None
@@ -63,6 +77,7 @@ class TailoringAnswers:
     occupation_sector: str | None = None
     soc_code: str | None = None
     nationality: str | None = None
+    visa_length_months: int | None = None
 
     @classmethod
     def reference_example(cls) -> TailoringAnswers:
@@ -141,10 +156,15 @@ def _coerce(raw: object, kind: object) -> Answer:
 
 @dataclass(frozen=True, slots=True)
 class ResolvedAnswers:
-    """Every question's effective value, with the ids that were assumed."""
+    """Every question's effective value, with the ids that were assumed.
+
+    ``visa_months`` is the requested visa length in months: ``visa_length_months``
+    when given, otherwise ``12 x visa_length_years``.
+    """
 
     values: Mapping[str, Answer]
     assumed: frozenset[str]
+    visa_months: int | None = None
 
     def __getitem__(self, question_id: str) -> Answer:
         return self.values[question_id]
@@ -155,6 +175,12 @@ class ResolvedAnswers:
         if isinstance(value, bool) or not isinstance(value, int):
             raise TypeError(f"{question_id} is not an integer answer")
         return value
+
+    def months(self) -> int:
+        """The requested visa length in months."""
+        if self.visa_months is not None:
+            return self.visa_months
+        return MONTHS_PER_YEAR * self.count("visa_length_years")
 
 
 def resolve_answers(pack: GuidancePack, answers: TailoringAnswers | None = None) -> ResolvedAnswers:
@@ -169,9 +195,15 @@ def resolve_answers(pack: GuidancePack, answers: TailoringAnswers | None = None)
     problems: list[str] = []
     for missing in sorted(question_ids - field_names):
         problems.append(f"pack question {missing!r} has no TailoringAnswers field")
-    for extra in sorted(field_names - question_ids):
+    for extra in sorted(field_names - question_ids - REFINEMENT_FIELDS):
         if extra in given:
             problems.append(f"{extra!r} is not a question in pack {pack.pack_id}")
+
+    months = given.pop("visa_length_months", None)
+    if months is not None:
+        derived = _years_from_months(pack, months, given.get("visa_length_years"), problems)
+        if derived is not None:
+            given["visa_length_years"] = derived
 
     values: dict[str, Answer] = {}
     assumed: set[str] = set()
@@ -188,7 +220,42 @@ def resolve_answers(pack: GuidancePack, answers: TailoringAnswers | None = None)
             assumed.add(question.id)
     if problems:
         raise TailoringError(problems)
-    return ResolvedAnswers(values=MappingProxyType(values), assumed=frozenset(assumed))
+    return ResolvedAnswers(
+        values=MappingProxyType(values),
+        assumed=frozenset(assumed),
+        visa_months=months if isinstance(months, int) else None,
+    )
+
+
+def _years_from_months(
+    pack: GuidancePack, months: Answer, years: Answer, problems: list[str]
+) -> int | None:
+    """Validate ``visa_length_months`` and return the whole years it implies.
+
+    The months must be a whole number from 1 to 12 x the years question's maximum, and
+    must agree with ``visa_length_years`` when that is also given.
+    """
+    question = next((q for q in pack.questions if q.id == "visa_length_years"), None)
+    if question is None:
+        problems.append(f"visa_length_months needs a visa_length_years question in {pack.pack_id}")
+        return None
+    top = MONTHS_PER_YEAR * question.maximum if question.maximum is not None else None
+    if isinstance(months, bool) or not isinstance(months, int) or months < 1:
+        problems.append(
+            f"visa_length_months: {months!r} is not a whole number of months of 1 or more"
+        )
+        return None
+    if top is not None and months > top:
+        problems.append(f"visa_length_months: {months} is more than the maximum of {top} months")
+        return None
+    derived = -(-months // MONTHS_PER_YEAR)
+    if years is not None and years != derived:
+        problems.append(
+            f"visa_length_months: {months} months is {derived} years when rounded up, but "
+            f"visa_length_years is {years!r}; give one of them or make them agree"
+        )
+        return None
+    return derived
 
 
 def _expected(question: Question) -> str:

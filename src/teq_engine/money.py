@@ -89,7 +89,8 @@ def to_decimal(value: object) -> Decimal:
 
     Accepted: ``Decimal``, ``int`` and decimal strings such as ``"90000.00"``.
     Refused: ``float`` (inexact), ``bool`` (an ``int`` subclass that is never money),
-    NaN and infinities, and anything else.
+    NaN and infinities, and anything else. Negative zero becomes zero (``"-0.00"`` gives
+    ``Decimal("0.00")``), so it can never reach a hash or a stored result.
     """
     if isinstance(value, bool):
         raise MoneyTypeError("a boolean is not an amount")
@@ -113,6 +114,8 @@ def to_decimal(value: object) -> Decimal:
         raise MoneyTypeError(f"{type(value).__name__} is not accepted as an amount")
     if not result.is_finite():
         raise MoneyTypeError("NaN and infinite values are not amounts")
+    if result.is_zero() and result.is_signed():
+        result = result.copy_abs()
     return result
 
 

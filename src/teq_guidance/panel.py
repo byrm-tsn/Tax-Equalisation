@@ -11,8 +11,20 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import date
 
-from teq_guidance.costs import compute_costs, cost_subtotals, maintenance_funds
-from teq_guidance.formatting import decimal_string, format_money, format_range
+from teq_guidance.costs import (
+    MAX_SINGLE_GRANT_MONTHS,
+    compute_costs,
+    cost_subtotals,
+    grant_cap_note,
+    maintenance_funds,
+    priced_visa_months,
+)
+from teq_guidance.formatting import (
+    decimal_string,
+    format_money,
+    format_range,
+    in_decimal_context,
+)
 from teq_guidance.loader import load_pack
 from teq_guidance.model import (
     Actor,
@@ -118,6 +130,7 @@ UNANSWERED_HEADING = "What we would need to tailor this further"
 type Plain = dict[str, object]
 
 
+@in_decimal_context
 def build_panel(
     answers: TailoringAnswers | None = None,
     *,
@@ -130,7 +143,10 @@ def build_panel(
     ``answers`` defaults to all questions unanswered (the pack's assumed values
     are used and listed). ``as_of`` is the date the panel is shown; when given,
     content verified more than ``max_content_age_days`` earlier carries the
-    ``IMMIGRATION_CONTENT_STALE`` warning. The package has no clock of its own.
+    ``IMMIGRATION_CONTENT_STALE`` warning. A visa length longer than a single grant
+    (60 months) is priced as one 60-month grant and carries the
+    ``VISA_LENGTH_EXCEEDS_SINGLE_GRANT`` warning. The package has no clock of its own.
+    All decimal arithmetic runs in a fixed local context, whatever the host's.
     """
     pack = pack if pack is not None else load_pack()
     answers = answers if answers is not None else TailoringAnswers()
@@ -145,7 +161,10 @@ def build_panel(
         version=pack.version,
         verified_at=pack.verified_at.isoformat(),
         disclaimer=pack.disclaimer,
-        warnings=_warnings(pack, as_of, max_content_age_days),
+        warnings=[
+            *_warnings(pack, as_of, max_content_age_days),
+            *_grant_warnings(selected.answers.months()),
+        ],
         tailoring=_tailoring(pack, selected),
         route_notes=[
             {
@@ -159,7 +178,7 @@ def build_panel(
         ],
         eligibility=_eligibility(pack, selected),
         documents=_documents(pack, selected),
-        costs=_costs(pack, lines),
+        costs=_costs(pack, lines, selected.answers.months()),
         maintenance_funds=_maintenance(pack, answers),
         timeline=_timeline(pack, timeline),
         employer_responsibilities=[
@@ -222,6 +241,25 @@ def _warnings(pack: GuidancePack, as_of: date | None, max_age: int) -> list[Plai
     ]
 
 
+def _grant_warnings(requested_months: int) -> list[Plain]:
+    """A warning when the requested visa length is longer than a single grant."""
+    note = grant_cap_note(requested_months)
+    if not note:
+        return []
+    return [
+        {
+            "code": "VISA_LENGTH_EXCEEDS_SINGLE_GRANT",
+            "severity": "warning",
+            "text": (
+                f"The requested visa length of {requested_months} months is longer than a "
+                f"single Skilled Worker grant (at most {MAX_SINGLE_GRANT_MONTHS} months). "
+                f"{note} The further application has its own fees, health surcharge and "
+                "Immigration Skills Charge."
+            ),
+        }
+    ]
+
+
 def _tailoring(pack: GuidancePack, selected: Applicable) -> Plain:
     resolved = selected.answers
     questions: list[Plain] = []
@@ -258,6 +296,7 @@ def _tailoring(pack: GuidancePack, selected: Applicable) -> Plain:
             )
     return {
         "questions": questions,
+        "visa_length_months": resolved.months(),
         "unanswered": unanswered,
         "unanswered_heading": UNANSWERED_HEADING,
         "answered_count": len(questions) - len(unanswered),
@@ -365,7 +404,7 @@ def _cost_entry(pack: GuidancePack, line: CostLine) -> Plain:
     }
 
 
-def _costs(pack: GuidancePack, lines: list[CostLine]) -> Plain:
+def _costs(pack: GuidancePack, lines: list[CostLine], requested_months: int) -> Plain:
     subtotals = cost_subtotals(lines)
     amounts = {
         "employer_mandatory": subtotals.employer_mandatory,
@@ -376,6 +415,8 @@ def _costs(pack: GuidancePack, lines: list[CostLine]) -> Plain:
     }
     return {
         "currency": "GBP",
+        "visa_months_requested": requested_months,
+        "visa_months_priced": priced_visa_months(requested_months),
         "lines": [_cost_entry(pack, line) for line in lines if not line.optional],
         "optional": [_cost_entry(pack, line) for line in lines if line.optional],
         "subtotals": {key: decimal_string(value) for key, value in amounts.items()},

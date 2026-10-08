@@ -5,8 +5,11 @@
 For each assignment year:
 
 1. **Net guarantee** (HS212): ``net salary = salary - hypothetical tax``; gross-equalised
-   items (a bonus) join it; ``NET_CASH`` items (the cost-of-living allowance) are added
-   to give the net cash target ``N`` (66,000 in the reference example).
+   items (a bonus) join it, less their hypothetical-tax share when the base is all
+   equalised items (``override / salary`` of each item under an override; the increase
+   in the calculated Turkish tax otherwise; none, with ``EQUALISED_ITEM_NO_HYPO_SHARE``,
+   when the base is salary only); ``NET_CASH`` items (the cost-of-living allowance) are
+   added to give the net cash target ``N`` (66,000 in the reference example).
 2. **Benefits**: the cash equivalent of ``TAXABLE_BIK`` items (plus any relocation over
    the per-move cap) is ``BIK``; exempt and employer-only items are costs only.
 3. **Gross-up** (PAYE81740, PAYE72025): solve ``G - IncomeTax(G + BIK) - EmployeeNICs(G)
@@ -33,7 +36,7 @@ from decimal import Decimal
 from typing import Final
 
 from teq_engine._version import __version__
-from teq_engine.errors import EngineInvariantError, SolverError
+from teq_engine.errors import EngineInvariantError, ScenarioValidationError, SolverError
 from teq_engine.jurisdictions.gb.benefits import (
     RelocationAllocation,
     RelocationPayment,
@@ -42,7 +45,7 @@ from teq_engine.jurisdictions.gb.benefits import (
 )
 from teq_engine.jurisdictions.gb.income_tax import band_slices, income_tax, personal_allowance
 from teq_engine.jurisdictions.gb.nic import class_1a, employee_nic, employer_nic
-from teq_engine.jurisdictions.tr.hypo import turkish_hypothetical_tax
+from teq_engine.jurisdictions.tr.hypo import fx_used, turkish_hypothetical_tax
 from teq_engine.jurisdictions.tr.social_security import employer_contribution
 from teq_engine.money import DEFAULT_ROUNDING, ZERO, engine_context
 from teq_engine.periods import Period, build_period_plan
@@ -56,17 +59,20 @@ from teq_engine.ratesets.schemas import (
     UkBenefitRulesData,
     UkIncomeTaxData,
     UkNicData,
+    content_checksum,
 )
 from teq_engine.routes.registry import RouteSpec, resolve_route
 from teq_engine.solver import GrossUpProblem, gross_breakpoints, solve_gross_up
 from teq_engine.trace import TraceBuilder, fmt_money, fmt_percent, fmt_rate
 from teq_engine.treatments import NIC_CLASS, Treatment, default_treatment, display_label
 from teq_engine.types import (
+    AllocationLine,
     Assumption,
     CalculationResult,
     CompensationItem,
     Currency,
     Decomposition,
+    FxUsed,
     GrossUpResult,
     HypoTaxBase,
     HypoTaxMethod,
@@ -93,6 +99,8 @@ __all__ = [
     "ENGINE_VERSION",
     "SCHEMA_VERSION",
     "calculate",
+    "compute_cache_key",
+    "compute_rate_set_fingerprint",
 ]
 
 ENGINE_VERSION: Final = __version__
@@ -205,6 +213,9 @@ class _YearItems:
     benefit_cost: Decimal = ZERO
     exempt_cost: Decimal = ZERO
     allocations: dict[str, ItemAllocation] = field(default_factory=dict)
+    relocation_paid: bool = False
+    relocation_exempt: Decimal = ZERO
+    relocation_taxable: Decimal = ZERO
 
 
 @dataclass(slots=True)
@@ -237,6 +248,22 @@ def _resolve_year(provider: RateSetProvider, route: RouteSpec, period: Period) -
         tr_income_tax=resolve(provider, home, RateCategory.TR_INCOME_TAX.value, tr_on),
         tr_sgk=resolve(provider, home, RateCategory.TR_SGK.value, tr_on),
         tr_stamp=resolve(provider, home, RateCategory.TR_STAMP.value, tr_on),
+    )
+
+
+def _check_fx_date(inputs: ScenarioInput, rates_as_of: date) -> None:
+    """Refuse an FX snapshot dated after the rates date (``FX_RATE_IN_FUTURE``).
+
+    A result is pinned to its rates date; a rate not yet known on that date would make
+    the result irreproducible, so it is refused rather than silently accepted.
+    """
+    fx = inputs.fx
+    if fx is None or fx.as_of <= rates_as_of:
+        return
+    params = {"as_of": fx.as_of.isoformat(), "rates_as_of": rates_as_of.isoformat()}
+    text, _ = render(Code.FX_RATE_IN_FUTURE, params)
+    raise ScenarioValidationError(
+        text, code=Code.FX_RATE_IN_FUTURE.value, loc=("fx", "as_of"), params=params
     )
 
 
@@ -297,6 +324,9 @@ def _allocate_items(
             bucket.exempt_cost += alloc.exempt
             bucket.taxable_benefits += alloc.taxable
             bucket.benefit_cost += alloc.taxable
+            bucket.relocation_paid = True
+            bucket.relocation_exempt += alloc.exempt
+            bucket.relocation_taxable += alloc.taxable
             bucket.allocations[alloc.item_id] = ItemAllocation(
                 assignment_year=alloc.assignment_year,
                 amount=alloc.amount,
@@ -305,6 +335,7 @@ def _allocate_items(
                 taxable_benefit=alloc.taxable,
                 benefit_cost=alloc.taxable,
                 exempt=alloc.exempt,
+                lines=_relocation_lines(alloc),
             )
             if alloc.outside_window:
                 collector.warn(
@@ -322,6 +353,22 @@ def _allocate_items(
                     excess=fmt_money(alloc.taxable),
                 )
     return per_year, relocation
+
+
+def _relocation_lines(alloc: RelocationAllocation) -> tuple[AllocationLine, ...]:
+    """The two lines of a capped relocation payment: exempt within the cap, and taxable."""
+    return tuple(
+        AllocationLine(
+            treatment=treatment,
+            display_label=display_label(treatment),
+            nic_class=NIC_CLASS[treatment],
+            amount=amount,
+        )
+        for treatment, amount in (
+            (Treatment.EXEMPT_CAPPED, alloc.exempt),
+            (Treatment.TAXABLE_BIK, alloc.taxable),
+        )
+    )
 
 
 def _item_results(
@@ -376,7 +423,9 @@ def _override_hypo(
     if spec.override is None:  # pragma: no cover - guaranteed by ScenarioInput validation
         raise EngineInvariantError("OVERRIDE without an override amount")
     comparison: Decimal | None = None
+    pinned: FxUsed | None = None
     if inputs.fx is not None and salary_try is not None:
+        pinned = fx_used(inputs.fx)
         comparison = turkish_hypothetical_tax(
             gross_try=salary_try,
             fx=inputs.fx,
@@ -392,6 +441,7 @@ def _override_hypo(
         amount=spec.override,
         includes_social_security=spec.includes_social_security,
         base=spec.base,
+        fx=pinned,
         calculated_for_comparison=comparison,
     )
 
@@ -425,8 +475,150 @@ def _hypo_for_year(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _HypoCharge:
+    """The hypothetical tax charged in one year, split between salary and equalised items."""
+
+    total: Decimal
+    on_salary: Decimal
+    on_items: Decimal
+    item_shares: dict[str, Decimal]
+    basis: str
+
+
+_PENNY_ZERO: Final = Decimal("0.00")
+
+
+def _hypo_charge(
+    inputs: ScenarioInput,
+    year_rates: _YearRates,
+    items: _YearItems,
+    hypo: HypoTaxResult,
+    salary_gbp: Decimal,
+    salary_try: Decimal | None,
+) -> _HypoCharge:
+    """Split the year's hypothetical tax between salary and gross-equalised items.
+
+    * Base ``SALARY_ONLY``: no share; the items join the net guarantee in full (the
+      caller emits ``EQUALISED_ITEM_NO_HYPO_SHARE``).
+    * Base ``ALL_EQUALISED``, ``OVERRIDE``: each item bears ``amount x override /
+      salary``, the override's effective rate on salary.
+    * Base ``ALL_EQUALISED``, ``CALCULATED``: ``hypo`` was computed on salary plus the
+      items; the share is that figure less the Turkish tax on salary alone, spread over
+      the items pro rata (the last item takes the rounding remainder).
+    """
+    r = DEFAULT_ROUNDING
+    spec = inputs.hypothetical_tax
+    equalised = {
+        item_id: alloc.equalised_gross
+        for item_id, alloc in items.allocations.items()
+        if alloc.equalised_gross > 0
+    }
+    if not equalised:
+        return _HypoCharge(hypo.amount, hypo.amount, _PENNY_ZERO, {}, "no gross-equalised items")
+    if spec.base is HypoTaxBase.SALARY_ONLY:
+        return _HypoCharge(
+            hypo.amount,
+            hypo.amount,
+            _PENNY_ZERO,
+            dict.fromkeys(equalised, _PENNY_ZERO),
+            "none: the hypothetical tax base is salary only",
+        )
+    with engine_context():
+        if hypo.mode == "OVERRIDE":
+            shares = {
+                item_id: (
+                    r.round_minor(amount * hypo.amount / salary_gbp)
+                    if salary_gbp > 0
+                    else _PENNY_ZERO
+                )
+                for item_id, amount in equalised.items()
+            }
+            on_items = sum(shares.values(), _PENNY_ZERO)
+            return _HypoCharge(
+                hypo.amount + on_items,
+                hypo.amount,
+                on_items,
+                shares,
+                f"override x item / salary ({fmt_money(hypo.amount)} / {fmt_money(salary_gbp)})",
+            )
+        fx = inputs.fx
+        if fx is None or salary_try is None:  # pragma: no cover - guaranteed by validation
+            raise EngineInvariantError("a calculated hypothetical tax needs an FX snapshot")
+        on_salary = turkish_hypothetical_tax(
+            gross_try=salary_try,
+            fx=fx,
+            income_tax_rates=year_rates.tr_it,
+            sgk_rates=year_rates.sgk,
+            stamp_rates=year_rates.stamp,
+            includes_social_security=spec.includes_social_security,
+            base=spec.base,
+            tax_year=year_rates.period.primary.tr_calendar_year,
+        ).amount
+        on_items = hypo.amount - on_salary
+        total_items = sum(equalised.values(), ZERO)
+        shares = {}
+        allocated = _PENNY_ZERO
+        ids = list(equalised)
+        for item_id in ids[:-1]:
+            shares[item_id] = r.round_minor(on_items * equalised[item_id] / total_items)
+            allocated += shares[item_id]
+        shares[ids[-1]] = on_items - allocated
+        return _HypoCharge(
+            hypo.amount,
+            on_salary,
+            on_items,
+            shares,
+            "Turkish tax on salary plus the items less Turkish tax on salary alone",
+        )
+
+
+def _equalised_item_warnings(inputs: ScenarioInput, collector: _Collector) -> None:
+    """Flag gross-equalised items that bear no hypothetical tax (base salary only)."""
+    if inputs.hypothetical_tax.base is not HypoTaxBase.SALARY_ONLY:
+        return
+    for item in inputs.items:
+        if item.effective_treatment is Treatment.GROSS_EQUALISED and item.annual_amount > 0:
+            collector.warn(
+                Code.EQUALISED_ITEM_NO_HYPO_SHARE,
+                item=item.label or item.id,
+                amount=fmt_money(item.annual_amount),
+            )
+
+
 def _line(code: LineCode, amount: Decimal, trace_ref: str | None) -> Line:
     return Line(code=code, label=LINE_LABELS[code], amount=amount, trace_ref=trace_ref)
+
+
+def compute_rate_set_fingerprint(rate_sets: Iterable[RateSet]) -> str:
+    """``sha256`` over the sorted, distinct ``(id, content checksum)`` pairs of ``rate_sets``.
+
+    The checksum covers the figures, so editing a rate under an unchanged identifier
+    (same category, label and version) changes the fingerprint.
+    """
+    pairs = sorted({(rs.id, content_checksum(rs)) for rs in rate_sets})
+    return sha256_prefixed(canonical_json([[rs_id, checksum] for rs_id, checksum in pairs]))
+
+
+def compute_cache_key(
+    *, inputs_hash: str, rate_set_fingerprint: str, engine_version: str, rates_as_of: date
+) -> str:
+    """The key a cache or de-duplication must use for a result.
+
+    ``sha256`` over the canonical JSON object ``{"engine_version", "inputs_hash",
+    "rate_set_fingerprint", "rates_as_of" (ISO date)}``. Equal keys mean identical
+    results; ``inputs_hash`` alone is not enough.
+    """
+    return sha256_prefixed(
+        canonical_json(
+            {
+                "engine_version": engine_version,
+                "inputs_hash": inputs_hash,
+                "rate_set_fingerprint": rate_set_fingerprint,
+                "rates_as_of": rates_as_of.isoformat(),
+            }
+        )
+    )
 
 
 def _provenance(years: Sequence[_YearRates]) -> tuple[ProvenanceEntry, ...]:
@@ -468,6 +660,8 @@ def calculate(
     and is recorded in the result; it is never read from a clock. Raises
     :class:`~teq_engine.errors.UnsupportedRouteError` (or its region subclass) for a
     route outside the capability matrix,
+    :class:`~teq_engine.errors.ScenarioValidationError` (``FX_RATE_IN_FUTURE``) when the
+    FX snapshot is dated after ``rates_as_of``,
     :class:`~teq_engine.errors.RatesUnavailableError` when no rate set covers a year,
     and :class:`~teq_engine.errors.SolverError` if the gross-up cannot be solved; no
     partial figures are ever returned.
@@ -485,6 +679,7 @@ def _calculate(
 
     # ---- route and periods
     route = resolve_route(inputs.route)
+    _check_fx_date(inputs, rates_as_of)
     anchor = inputs.assignment.start_date or rates_as_of
     plan = build_period_plan(inputs.assignment.length_years, anchor, inputs.assignment.period_mode)
     trace.add(
@@ -587,9 +782,8 @@ def _calculate(
     # ---- items and relocation cap
     per_year, relocation = _allocate_items(inputs, years, collector)
     cap = year1.benefits.relocation.exemption_cap
-    items = _item_results(inputs, per_year, relocation, cap)
 
-    # ---- hypothetical tax
+    # ---- hypothetical tax, and its share on gross-equalised items
     override = (
         _override_hypo(inputs, year1, salary_try)
         if inputs.hypothetical_tax.method is HypoTaxMethod.OVERRIDE
@@ -601,6 +795,18 @@ def _calculate(
         )
         for y in years
     }
+    charges: dict[int, _HypoCharge] = {}
+    for y in years:
+        year = y.period.assignment_year
+        charge = _hypo_charge(inputs, y, per_year[year], hypo_by_year[year], salary_gbp, salary_try)
+        charges[year] = charge
+        allocations = per_year[year].allocations
+        for item_id, share in charge.item_shares.items():
+            allocations[item_id] = allocations[item_id].model_copy(
+                update={"hypothetical_tax_share": share}
+            )
+    _equalised_item_warnings(inputs, collector)
+    items = _item_results(inputs, per_year, relocation, cap)
     hypo1 = hypo_by_year[1]
     hypo_values: dict[str, str] = {"mode": hypo1.mode, "amount_gbp": fmt_money(hypo1.amount)}
     if hypo1.components is not None:
@@ -634,6 +840,7 @@ def _calculate(
                 year_rates=year_rates,
                 items=per_year[year_rates.period.assignment_year],
                 hypo=hypo_by_year[year_rates.period.assignment_year],
+                charge=charges[year_rates.period.assignment_year],
                 salary_gbp=salary_gbp,
                 salary_try=salary_try,
                 nic_applies=nic_applies,
@@ -697,14 +904,22 @@ def _calculate(
         )
 
     rate_set_ids = tuple(sorted({rs_id for y in years for rs_id in y.ids}))
+    fingerprint = compute_rate_set_fingerprint(r.rate_set for y in years for r in y.all())
+    inputs_hash = inputs.inputs_hash()
     return CalculationResult(
         schema_version=SCHEMA_VERSION,
         engine_version=ENGINE_VERSION,
         rates_as_of=rates_as_of,
         rate_set_ids=rate_set_ids,
-        rate_set_fingerprint=sha256_prefixed(canonical_json(list(rate_set_ids))),
+        rate_set_fingerprint=fingerprint,
         period_mode=plan.mode,
-        inputs_hash=inputs.inputs_hash(),
+        inputs_hash=inputs_hash,
+        cache_key=compute_cache_key(
+            inputs_hash=inputs_hash,
+            rate_set_fingerprint=fingerprint,
+            engine_version=ENGINE_VERSION,
+            rates_as_of=rates_as_of,
+        ),
         rounding=RoundingBlock(
             gross_cash=rounding.gross_cash,
             lines=rounding.lines,
@@ -731,6 +946,7 @@ def _calculate_year(
     year_rates: _YearRates,
     items: _YearItems,
     hypo: HypoTaxResult,
+    charge: _HypoCharge,
     salary_gbp: Decimal,
     salary_try: Decimal | None,
     nic_applies: bool,
@@ -744,42 +960,55 @@ def _calculate_year(
     nic_rates = year_rates.nic
 
     # ---- net guarantee
-    net_salary = salary_gbp + items.equalised_gross - hypo.amount
+    net_salary = salary_gbp + items.equalised_gross - charge.total
     target = net_salary + items.net_cash
     guarantee = NetGuarantee(
         salary=salary_gbp,
         equalised_items=items.equalised_gross,
-        hypothetical_tax=hypo.amount,
+        hypothetical_tax=charge.total,
         net_salary=net_salary,
         net_allowances=items.net_cash,
         net_cash_target=target,
+        hypothetical_tax_on_salary=charge.on_salary,
+        hypothetical_tax_on_equalised_items=charge.on_items,
     )
     trace.add(
         "net_guarantee",
-        "Net guarantee: salary (plus gross-equalised items) less the hypothetical home "
-        "tax, plus allowances promised net.",
+        "Net guarantee: salary plus gross-equalised items, less the hypothetical home tax "
+        "(on salary, plus its share on those items when the base is all equalised items), "
+        "plus allowances promised net.",
         assignment_year=year,
         refs=NET_GUARANTEE_REFS,
         values={
             "salary": fmt_money(salary_gbp),
             "equalised_items": fmt_money(items.equalised_gross),
-            "hypothetical_tax": fmt_money(hypo.amount),
+            "hypothetical_tax": fmt_money(charge.total),
             "hypothetical_tax_mode": hypo.mode,
+            "hypothetical_tax_on_salary": fmt_money(charge.on_salary),
+            "hypothetical_tax_on_equalised_items": fmt_money(charge.on_items),
+            "hypothetical_share_basis": charge.basis,
             "net_salary": fmt_money(net_salary),
             "net_allowances": fmt_money(items.net_cash),
             "net_cash_target": fmt_money(target),
         },
     )
+    benefit_values = {
+        "taxable_benefits": fmt_money(items.taxable_benefits),
+        "benefit_cost": fmt_money(items.benefit_cost),
+        "exempt_cost": fmt_money(items.exempt_cost),
+    }
+    if items.relocation_paid:
+        benefit_values |= {
+            "relocation_exempt": fmt_money(items.relocation_exempt),
+            "relocation_excess_taxable": fmt_money(items.relocation_taxable),
+        }
     benefits_ref = trace.add(
         "benefits",
         "Taxable benefits enter the income-tax base at their cash equivalent (Class 1A for "
-        "the employer, no employee NICs); exempt and employer-only items are costs only.",
+        "the employer, no employee NICs); exempt and employer-only items are costs only. "
+        "Relocation is exempt within the per-move cap; any excess is a taxable benefit.",
         assignment_year=year,
-        values={
-            "taxable_benefits": fmt_money(items.taxable_benefits),
-            "benefit_cost": fmt_money(items.benefit_cost),
-            "exempt_cost": fmt_money(items.exempt_cost),
-        },
+        values=benefit_values,
     )
 
     # ---- gross-up
@@ -899,9 +1128,12 @@ def _calculate_year(
             raise EngineInvariantError("home-scheme mode needs an FX snapshot")
         gross_try = salary_try + items.equalised_gross * fx.rate
         contribution = employer_contribution(gross_try, year_rates.sgk)
+        # One rounding for the line (exact lira / rate to the pound); the kuruş and
+        # penny figures are for display only.
+        exact_gbp = contribution.amount / fx.rate
         amount_try = r.round_minor(contribution.amount)
-        amount_gbp = r.round_minor(amount_try / fx.rate)
-        home_line = r.round_line(amount_gbp)
+        amount_gbp = r.round_minor(exact_gbp)
+        home_line = r.round_line(exact_gbp)
         home_values = {
             "home_employer_rate": fmt_rate(contribution.rate),
             "home_employer_base_monthly_try": fmt_money(contribution.monthly_base),

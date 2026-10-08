@@ -2,9 +2,10 @@
 
 ``hypo = income tax + stamp tax (+ employee SGK when the hypothetical deduction includes
 social security)``, computed in lira on the annual gross and converted to pounds at the
-dated FX snapshot supplied with the scenario. Each lira component is rounded to the
-kuruş; each pound figure to the penny; the total in pounds is the lira total converted
-(not the sum of converted components).
+dated FX snapshot supplied with the scenario. Each lira component is rounded half-up to
+the kuruş and serialised with two decimals (``"0.00"``, never ``"0"``, when the
+minimum-wage exemption removes the income tax); each pound figure to the penny; the
+total in pounds is the lira total converted (not the sum of converted components).
 
 Check case (2026 rules, salary 90,000 GBP at 65.7 TRY per GBP): gross 5,913,000; SGK
 535,086.00; income tax 1,728,665.60 less the minimum-wage credit 57,881.20 =
@@ -58,13 +59,15 @@ def turkish_hypothetical_tax(
     gross = r.round_minor(gross_try)
     sgk = employee_contribution(gross, sgk_rates)
     sgk_try = r.round_minor(sgk.amount)
-    tax_base = max(ZERO, gross - sgk_try)
+    tax_base = r.round_minor(max(ZERO, gross - sgk_try))
     before = r.round_minor(wage_income_tax(tax_base, income_tax_rates))
     exemption = r.round_minor(minimum_wage_exemption(income_tax_rates, sgk_rates))
-    income_tax_try = max(ZERO, before - exemption)
+    income_tax_try = r.round_minor(max(ZERO, before - exemption))
     stamp_base = r.round_minor(stamp_tax_base(gross, stamp_rates, sgk_rates))
     stamp_try = r.round_minor(stamp_tax(gross, stamp_rates, sgk_rates))
-    total_try = income_tax_try + stamp_try + (sgk_try if includes_social_security else ZERO)
+    total_try = r.round_minor(
+        income_tax_try + stamp_try + (sgk_try if includes_social_security else ZERO)
+    )
     rate = fx.rate
     total_gbp = r.round_minor(total_try / rate)
     components = HypoTaxComponents(

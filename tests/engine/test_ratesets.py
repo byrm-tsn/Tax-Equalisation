@@ -158,3 +158,75 @@ def test_resolve_carries_forward_and_refuses_backwards(provider: BundledProvider
 def test_effective_range_is_inclusive(provider: BundledProvider) -> None:
     assert provider.get("TR", "TR_SGK", date(2026, 12, 31)) is not None
     assert provider.get("TR", "TR_SGK", date(2027, 1, 1)) is None
+
+
+# --------------------------------------------------------------------------- gaps between sets
+
+
+def _nic_2028_29() -> Any:
+    """A synthetic later NIC set (2028-29), leaving 2027-28 unpublished: a gap."""
+    raw = _raw("gb/nic_2026_27.yaml")
+    raw["label"] = "2028-29"
+    raw["effective_from"] = "2028-04-06"
+    raw["effective_to"] = "2029-04-05"
+    raw["data"]["employee"]["main_rate"] = "0.07"
+    return parse_rate_set(raw)
+
+
+class _GetAndLatestOnly:
+    """A provider with only the two protocol methods (no latest_on_or_before)."""
+
+    def __init__(self, inner: BundledProvider) -> None:
+        self._inner = inner
+
+    def get(self, jurisdiction: str, category: str, as_of: date) -> Any:
+        return self._inner.get(jurisdiction, category, as_of)
+
+    def latest(self, jurisdiction: str, category: str) -> Any:
+        return self._inner.latest(jurisdiction, category)
+
+
+def test_gap_between_sets_carries_the_earlier_set_forward(provider: BundledProvider) -> None:
+    from teq_engine.ratesets.provider import SupportsLatestOnOrBefore
+
+    bundled = BundledProvider([*provider.all(), _nic_2028_29()])
+    minimal = _GetAndLatestOnly(bundled)
+    assert isinstance(bundled, SupportsLatestOnOrBefore)
+    assert not isinstance(minimal, SupportsLatestOnOrBefore)
+    for source in (bundled, minimal):
+        in_gap = resolve(source, "UK", "UK_NIC", date(2027, 4, 6))
+        assert in_gap.carried_forward
+        assert in_gap.rate_set.id == "UK_NIC:2026-27:v1"
+        late_in_gap = resolve(source, "UK", "UK_NIC", date(2028, 4, 5))
+        assert late_in_gap.rate_set.id == "UK_NIC:2026-27:v1"
+        later = resolve(source, "UK", "UK_NIC", date(2028, 4, 6))
+        assert not later.carried_forward
+        assert later.rate_set.id == "UK_NIC:2028-29:v1"
+        after_all = resolve(source, "UK", "UK_NIC", date(2030, 1, 1))
+        assert after_all.carried_forward
+        assert after_all.rate_set.id == "UK_NIC:2028-29:v1"
+        # Before every set: still refused, never applied backwards.
+        with pytest.raises(RatesUnavailableError):
+            resolve(source, "UK", "UK_NIC", date(2026, 4, 5))
+
+
+def test_calculation_across_a_gap(provider: BundledProvider, ref_data: dict[str, Any]) -> None:
+    from teq_engine import ScenarioInput, calculate
+
+    gapped = BundledProvider([*provider.all(), _nic_2028_29()])
+    ref_data["assignment"]["length_years"] = 3
+    result = calculate(
+        ScenarioInput.model_validate(ref_data), gapped, rates_as_of=date(2026, 10, 8)
+    )
+    y2, y3 = result.year(2), result.year(3)
+    assert "UK_NIC:2026-27:v1" in y2.rate_set_ids
+    assert "UK_NIC:2028-29:v1" in y3.rate_set_ids
+    assert y2.line("TOTAL_EMPLOYER_COST") == 180676  # 2026-27 rules carried into the gap
+    assert y3.line("EMPLOYEE_NIC") != y2.line("EMPLOYEE_NIC")  # the 7% main rate applies
+    carried = [
+        w
+        for w in result.warnings
+        if w.code == "RATES_NOT_PUBLISHED_FOR_YEAR" and w.params.get("jurisdiction") == "UK"
+    ]
+    assert {w.assignment_year for w in carried} >= {2}
+    assert "UK_NIC:2028-29:v1" in result.rate_set_ids

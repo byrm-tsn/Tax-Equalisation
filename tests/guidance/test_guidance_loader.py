@@ -57,8 +57,12 @@ def test_routes() -> None:
 
 
 def test_question_ids_are_exactly_the_tailoring_fields(pack: GuidancePack) -> None:
+    from teq_guidance.tailoring import REFINEMENT_FIELDS
+
+    # visa_length_months refines the visa_length_years question rather than being one.
+    assert {"visa_length_months"} == REFINEMENT_FIELDS
     fields = {field.name for field in dataclasses.fields(TailoringAnswers)}
-    assert {question.id for question in pack.questions} == fields
+    assert {question.id for question in pack.questions} == fields - REFINEMENT_FIELDS
 
 
 def test_every_item_cites_a_known_source(pack: GuidancePack) -> None:

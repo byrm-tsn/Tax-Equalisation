@@ -51,7 +51,7 @@ def test_year_two_and_total(result: CalculationResult) -> None:
     assert y2.tr_calendar_year == 2027
     assert y2.rates_carried_forward
     assert result.totals.total_employer_cost == Decimal("369352")
-    # The two-year total is the sum of the rounded year totals (unrounded: 369,351.45).
+    # The two-year total is the sum of the rounded year totals (unrounded: 369,351.47).
     assert result.totals.total_employer_cost == sum(
         y.line(LineCode.TOTAL_EMPLOYER_COST) for y in result.years
     )
@@ -210,13 +210,43 @@ def test_result_shape_matches_appendix_a(result: CalculationResult) -> None:
         assert entry["verified_at"] == "2026-10-08"
 
 
-def test_rate_set_fingerprint_is_hash_of_sorted_ids(result: CalculationResult) -> None:
+def test_rate_set_fingerprint_covers_ids_and_checksums(result: CalculationResult) -> None:
     from teq_engine.types import canonical_json, sha256_prefixed
 
     assert list(result.rate_set_ids) == sorted(result.rate_set_ids)
-    assert result.rate_set_fingerprint == sha256_prefixed(canonical_json(list(result.rate_set_ids)))
+    # sha256 over the sorted (id, content checksum) pairs of the sets actually used.
+    pairs = sorted((p.id, p.checksum) for p in result.provenance)
+    assert [rs_id for rs_id, _ in pairs] == list(result.rate_set_ids)
+    assert result.rate_set_fingerprint == sha256_prefixed(
+        canonical_json([[rs_id, checksum] for rs_id, checksum in pairs])
+    )
+    assert result.rate_set_fingerprint != sha256_prefixed(canonical_json(list(result.rate_set_ids)))
     assert "UK_INCOME_TAX:2026-27:v1" in result.rate_set_ids
     assert "TR_SGK:2026:v1" in result.rate_set_ids
+
+
+def test_cache_key_combines_the_four_identity_fields(result: CalculationResult) -> None:
+    from teq_engine.calculator import compute_cache_key
+    from teq_engine.types import canonical_json, sha256_prefixed
+
+    assert result.cache_key is not None
+    assert result.cache_key.startswith("sha256:")
+    assert result.cache_key == compute_cache_key(
+        inputs_hash=result.inputs_hash,
+        rate_set_fingerprint=result.rate_set_fingerprint,
+        engine_version=result.engine_version,
+        rates_as_of=result.rates_as_of,
+    )
+    assert result.cache_key == sha256_prefixed(
+        canonical_json(
+            {
+                "engine_version": "0.1.0",
+                "inputs_hash": result.inputs_hash,
+                "rate_set_fingerprint": result.rate_set_fingerprint,
+                "rates_as_of": "2026-10-08",
+            }
+        )
+    )
 
 
 def test_result_round_trips_through_json(result: CalculationResult) -> None:

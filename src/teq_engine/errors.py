@@ -10,6 +10,7 @@ __all__ = [
     "EngineInvariantError",
     "RateSetError",
     "RatesUnavailableError",
+    "ScenarioValidationError",
     "SolverError",
     "SupportedRoute",
     "UnsupportedRegionError",
@@ -103,6 +104,36 @@ class RatesUnavailableError(EngineError):
         self.jurisdiction = jurisdiction
         self.category = category
         self.as_of = as_of
+
+
+class ScenarioValidationError(EngineError):
+    """The inputs are valid on their own but cannot be calculated as given.
+
+    Raised by :func:`~teq_engine.calculate` for a rule that depends on the calculation
+    rather than on the inputs alone, such as an FX snapshot dated after the rates date
+    (``FX_RATE_IN_FUTURE``). ``code`` is the catalogue error code; ``loc`` names the input
+    to correct as a pydantic-style location such as ``("fx", "as_of")`` and
+    :attr:`pointer` gives it as a JSON pointer (``/fx/as_of``); ``params`` holds the
+    values the catalogue text and question were rendered with.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str,
+        loc: tuple[str | int, ...],
+        params: dict[str, str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.loc = loc
+        self.params = dict(params or {})
+
+    @property
+    def pointer(self) -> str:
+        """``loc`` as a JSON pointer, for example ``/fx/as_of``."""
+        return "/" + "/".join(str(part) for part in self.loc)
 
 
 class RateSetError(ValueError):

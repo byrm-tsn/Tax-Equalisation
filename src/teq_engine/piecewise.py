@@ -144,9 +144,11 @@ def fixed_point(
 ) -> tuple[Decimal, int]:
     """The pack's iteration: ``x <- x + (target - f(x))`` from ``start`` (default target).
 
-    Converges when ``f`` has slope in (0, 2); for the net-pay function the slope lies
-    between 0.38 and 1, so each step removes at least 38% of the error. Returns
-    ``(x, iterations)`` once the step is below ``tolerance``.
+    Converges when ``f`` has slope in (0, 2): the error is multiplied by ``1 - slope``
+    at each step. For the net-pay function the slope lies between 0.32 (the allowance
+    taper band with 8% NICs: 60% + 8% = 68% marginal) and 1, so each step removes at
+    least 32% of the error. Returns ``(x, iterations)`` once the step is below
+    ``tolerance``.
     """
     x = target if start is None else start
     for iteration in range(1, max_iterations + 1):

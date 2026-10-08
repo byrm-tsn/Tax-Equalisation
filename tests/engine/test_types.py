@@ -199,3 +199,98 @@ def test_models_are_frozen(ref_data: dict[str, Any]) -> None:
     inputs = scenario(ref_data)
     with pytest.raises(ValidationError):
         inputs.salary.amount = Decimal("1")  # type: ignore[misc]
+
+
+@pytest.mark.parametrize("treatment", ["EXEMPT", "EMPLOYER_ONLY", "NET_CASH", "GROSS_EQUALISED"])
+def test_relocation_cannot_escape_the_cap(ref_data: dict[str, Any], treatment: str) -> None:
+    ref_data["items"][2]["treatment"] = treatment
+    ref_data["items"][2]["amount"] = "50000.00"
+    loc, message = _errors(ref_data)[0]
+    assert loc == ("items", 2, "treatment")
+    assert "EXEMPT_CAPPED" in message
+    assert "TAXABLE_BIK" in message
+    assert treatment in message
+
+
+@pytest.mark.parametrize("treatment", [None, "EXEMPT_CAPPED", "TAXABLE_BIK"])
+def test_relocation_treatments_allowed(ref_data: dict[str, Any], treatment: str | None) -> None:
+    if treatment is not None:
+        ref_data["items"][2]["treatment"] = treatment
+    assert scenario(ref_data).items[2].effective_treatment.value in {"EXEMPT_CAPPED", "TAXABLE_BIK"}
+
+
+def test_try_to_gbp_conversion_rounds_half_up(ref_data: dict[str, Any]) -> None:
+    # 1,000,000.50 / 100 = 10,000.005: half-up gives 10,000.01 (half-even would give .00)
+    ref_data["salary"] = {"amount": "1000000.50", "currency": "TRY"}
+    ref_data["hypothetical_tax"]["override"] = "1000.00"
+    ref_data["fx"] = {"rate": "100", "as_of": "2026-10-01"}
+    assert scenario(ref_data).annual_salary_gbp() == Decimal("10000.01")
+
+
+def test_gbp_to_try_conversion_rounds_half_up(ref_data: dict[str, Any]) -> None:
+    # 0.01 x 0.5 = 0.005 lira: half-up gives 0.01 (half-even would give 0.00)
+    ref_data["salary"] = {"amount": "0.01", "currency": "GBP"}
+    ref_data["hypothetical_tax"]["override"] = "0.00"
+    ref_data["fx"] = {"rate": "0.5", "as_of": "2026-10-01"}
+    assert scenario(ref_data).annual_salary_try() == Decimal("0.01")
+
+
+def test_trace_money_rounds_half_up() -> None:
+    from teq_engine.trace import fmt_money
+
+    assert fmt_money(Decimal("0.005")) == "0.01"
+    assert fmt_money(Decimal("2.665")) == "2.67"
+
+
+def test_missing_region_hashes_as_england(ref_data: dict[str, Any]) -> None:
+    england = scenario(ref_data)
+    ref_data["route"].pop("region")
+    missing = scenario(ref_data)
+    assert missing.route.region is None
+    assert missing.inputs_hash() == england.inputs_hash()
+    assert '"region":"ENG"' in missing.canonical_json()
+    ref_data["route"]["region"] = None
+    assert scenario(ref_data).inputs_hash() == england.inputs_hash()
+
+
+def test_negative_zero_never_survives(ref_data: dict[str, Any]) -> None:
+    from teq_engine.money import to_decimal
+
+    assert not to_decimal("-0").is_signed()
+    assert not to_decimal("-0.00").is_signed()
+    assert not to_decimal(Decimal("-0")).is_signed()
+    ref_data["salary"]["amount"] = "0.00"
+    ref_data["hypothetical_tax"]["override"] = "0"
+    zero = scenario(ref_data)
+    for negative in ("-0", "-0.00", "-0.0"):
+        ref_data["hypothetical_tax"]["override"] = negative
+        inputs = scenario(ref_data)
+        assert inputs.hypothetical_tax.override is not None
+        assert not inputs.hypothetical_tax.override.is_signed()
+        assert inputs.inputs_hash() == zero.inputs_hash()
+        assert "-0" not in inputs.canonical_json()
+    ref_data["items"][0]["amount"] = "-0.00"
+    assert '"-0' not in scenario(ref_data).canonical_json()
+
+
+def test_item_years_are_sorted_for_hashing(ref_data: dict[str, Any]) -> None:
+    ref_data["assignment"]["length_years"] = 3
+    ref_data["items"][1]["years"] = [1, 3]
+    ordered = scenario(ref_data)
+    ref_data["items"][1]["years"] = [3, 1]
+    reversed_ = scenario(ref_data)
+    assert reversed_.inputs_hash() == ordered.inputs_hash()
+    assert '"years":[1,3]' in reversed_.canonical_json()
+    # A repeated year is refused rather than silently de-duplicated.
+    ref_data["items"][1]["years"] = [3, 1, 3]
+    assert _errors(ref_data)[0][1] == "years must not repeat"
+
+
+def test_canonical_json_round_trips(ref_data: dict[str, Any]) -> None:
+    ref_data["route"].pop("region")
+    ref_data["assignment"]["length_years"] = 3
+    ref_data["items"][1]["years"] = [3, 1]
+    inputs = scenario(ref_data)
+    again = ScenarioInput.model_validate_json(inputs.canonical_json())
+    assert again.canonical_json() == inputs.canonical_json()
+    assert again.inputs_hash() == inputs.inputs_hash()

@@ -59,12 +59,17 @@ APPENDIX_B = {
     "IMMIGRATION_CONTENT_STALE",
 }
 SCHEMA_ASSUMPTIONS = {"UK_RESIDENT_FULL_YEAR", "UK_NIC_APPLIES", "RATES_UNCHANGED_LATER_YEARS"}
-ENGINE_ERRORS = {"RATES_UNAVAILABLE"}
+ENGINE_ERRORS = {"RATES_UNAVAILABLE", "FX_RATE_IN_FUTURE"}
+REVIEW_WARNINGS = {"EQUALISED_ITEM_NO_HYPO_SHARE"}
 
 
 def test_catalogue_is_appendix_b_plus_documented_extras() -> None:
-    assert {c.value for c in CATALOGUE} == APPENDIX_B | SCHEMA_ASSUMPTIONS | ENGINE_ERRORS
+    assert {
+        c.value for c in CATALOGUE
+    } == APPENDIX_B | SCHEMA_ASSUMPTIONS | ENGINE_ERRORS | REVIEW_WARNINGS
     assert set(CATALOGUE) == set(Code)
+    assert CATALOGUE[Code.FX_RATE_IN_FUTURE].kind == "error"
+    assert CATALOGUE[Code.EQUALISED_ITEM_NO_HYPO_SHARE].kind == "warning"
 
 
 @pytest.mark.parametrize("code", list(Code))

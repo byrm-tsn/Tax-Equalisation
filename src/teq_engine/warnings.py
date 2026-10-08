@@ -6,8 +6,10 @@ fields; missing parameters are an engine bug and raise.
 
 The catalogue holds the codes of plan Appendix B, plus three assumption codes the
 result schema (Appendix A) uses (``UK_RESIDENT_FULL_YEAR``, ``UK_NIC_APPLIES``,
-``RATES_UNCHANGED_LATER_YEARS``) and the error ``RATES_UNAVAILABLE`` raised when no rate
-set covers a date.
+``RATES_UNCHANGED_LATER_YEARS``), the error ``RATES_UNAVAILABLE`` raised when no rate
+set covers a date, the error ``FX_RATE_IN_FUTURE`` raised when the FX snapshot is dated
+after the rates date, and the warning ``EQUALISED_ITEM_NO_HYPO_SHARE`` emitted when a
+gross-equalised item joins the net guarantee without a hypothetical-tax share.
 """
 
 from __future__ import annotations
@@ -43,8 +45,10 @@ class Code(StrEnum):
     REGION_NOT_SUPPORTED = "REGION_NOT_SUPPORTED"
     GROSS_UP_NOT_CONVERGED = "GROSS_UP_NOT_CONVERGED"
     RATES_UNAVAILABLE = "RATES_UNAVAILABLE"
+    FX_RATE_IN_FUTURE = "FX_RATE_IN_FUTURE"
     # warnings and information
     GROSS_UP_FALLBACK_BISECTION = "GROSS_UP_FALLBACK_BISECTION"
+    EQUALISED_ITEM_NO_HYPO_SHARE = "EQUALISED_ITEM_NO_HYPO_SHARE"
     SOCIAL_SECURITY_AGREEMENT_MAY_APPLY = "SOCIAL_SECURITY_AGREEMENT_MAY_APPLY"
     NIC_EXEMPTION_ASSUMED = "NIC_EXEMPTION_ASSUMED"
     PERSONAL_ALLOWANCE_TAPER_BAND = "PERSONAL_ALLOWANCE_TAPER_BAND"
@@ -139,6 +143,14 @@ _ENTRIES: Final = (
         "forward to it.",
         "Is the rates date inside a period the bundled rate tables cover?",
     ),
+    _e(
+        Code.FX_RATE_IN_FUTURE,
+        "error",
+        "Exchange rate dated after the rates date",
+        "The exchange rate is dated {as_of}, after the rates date {rates_as_of}; a result "
+        "cannot be pinned to a rate that was not yet known on its rates date.",
+        "Enter an exchange rate dated on or before {rates_as_of}, or use a later rates date.",
+    ),
     # ------------------------------------------------------------------ warnings / info
     _e(
         Code.GROSS_UP_FALLBACK_BISECTION,
@@ -147,6 +159,16 @@ _ENTRIES: Final = (
         "Assignment year {year}: the exact segment solve failed its check and bisection "
         "was used instead. The figures are valid; the fault should be investigated.",
         "No action for the user: an engine fault to investigate.",
+    ),
+    _e(
+        Code.EQUALISED_ITEM_NO_HYPO_SHARE,
+        "warning",
+        "No hypothetical tax on a gross-equalised item",
+        "The gross-equalised item {item} (£{amount} in each year it is paid) joins the net "
+        "guarantee in full because the hypothetical tax base is salary only, so no "
+        "hypothetical tax is deducted from it.",
+        "Should the employee bear hypothetical home tax on {item}? If so, set the "
+        "hypothetical tax base to all equalised items to charge a hypothetical share.",
     ),
     _e(
         Code.SOCIAL_SECURITY_AGREEMENT_MAY_APPLY,

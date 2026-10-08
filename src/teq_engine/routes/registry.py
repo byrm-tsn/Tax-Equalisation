@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from teq_engine.errors import SupportedRoute, UnsupportedRegionError, UnsupportedRouteError
-from teq_engine.types import Route
+from teq_engine.types import DEFAULT_REGIONS, Route
 from teq_engine.warnings import Code, render
 
 __all__ = [
@@ -29,8 +29,6 @@ __all__ = [
 SUPPORTED_ROUTES: Final[tuple[SupportedRoute, ...]] = (
     SupportedRoute(home="TR", host="GB", regions=("ENG",)),
 )
-
-_DEFAULT_REGION: Final = {"GB": "ENG"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +86,7 @@ def resolve_route(route: Route) -> RouteSpec:
             supported_routes=SUPPORTED_ROUTES,
         )
     capability = pair[0]
-    region = route.region or _DEFAULT_REGION.get(route.host, "")
+    region = route.region or DEFAULT_REGIONS.get(route.host, "")
     spec = _SPECS.get((route.home, route.host, region))
     if region not in capability.regions or spec is None:
         text, _ = render(

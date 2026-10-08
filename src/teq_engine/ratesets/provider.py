@@ -5,9 +5,16 @@ category in force on a date. :class:`BundledProvider` reads the YAML files packa
 under ``ratesets/data``; a database-backed provider (later stage) implements the same
 protocol.
 
-:func:`resolve` adds the carry-forward rule: when no set covers a later year, the latest
-set that started on or before that date is used and the caller emits
-``RATES_NOT_PUBLISHED_FOR_YEAR``. A date before every set is refused.
+:func:`resolve` adds the carry-forward rule: when no set covers a date, the latest set
+that started on or before it is used and the caller emits
+``RATES_NOT_PUBLISHED_FOR_YEAR``. That covers a later year with no published set and a
+date that falls in a gap between two sets (the earlier one is carried forward, never the
+later one backwards). A date before every set is refused.
+
+A provider may also implement :class:`SupportsLatestOnOrBefore` (``BundledProvider``
+does, and a database provider should) so that :func:`resolve` finds the earlier set
+directly; for a provider with only ``get`` and ``latest`` it probes backwards day by day,
+at most :data:`GAP_PROBE_DAYS` days.
 """
 
 from __future__ import annotations
@@ -17,11 +24,11 @@ import itertools
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from importlib import resources
 from importlib.resources.abc import Traversable
 from pathlib import Path
-from typing import Protocol
+from typing import Final, Protocol, runtime_checkable
 
 import yaml
 
@@ -29,9 +36,11 @@ from teq_engine.errors import RateSetError, RatesUnavailableError
 from teq_engine.ratesets.schemas import RateSet, parse_rate_set
 
 __all__ = [
+    "GAP_PROBE_DAYS",
     "BundledProvider",
     "RateSetProvider",
     "Resolved",
+    "SupportsLatestOnOrBefore",
     "default_provider",
     "load_rate_sets_from",
     "resolve",
@@ -48,6 +57,19 @@ class RateSetProvider(Protocol):
     def latest(self, jurisdiction: str, category: str) -> RateSet | None:
         """The rate set with the latest effective start, or ``None``."""
         ...
+
+
+@runtime_checkable
+class SupportsLatestOnOrBefore(Protocol):
+    """Optional provider capability used by :func:`resolve` to bridge gaps exactly."""
+
+    def latest_on_or_before(self, jurisdiction: str, category: str, as_of: date) -> RateSet | None:
+        """The rate set with the latest effective start on or before ``as_of``."""
+        ...
+
+
+GAP_PROBE_DAYS: Final = 366 * 11
+"""How far back :func:`resolve` probes for an earlier set when the provider cannot say."""
 
 
 def _load_yaml(text: str, origin: str) -> RateSet:
@@ -119,6 +141,15 @@ class BundledProvider:
         group = self._by_key.get((jurisdiction, category), ())
         return group[-1] if group else None
 
+    def latest_on_or_before(self, jurisdiction: str, category: str, as_of: date) -> RateSet | None:
+        """The set with the latest effective start on or before ``as_of``, or ``None``."""
+        earlier = [
+            rs
+            for rs in self._by_key.get((jurisdiction, category), ())
+            if rs.effective_from <= as_of
+        ]
+        return earlier[-1] if earlier else None
+
     def all(self) -> tuple[RateSet, ...]:
         """Every loaded rate set, ordered by jurisdiction, category and start date."""
         return tuple(rs for key in sorted(self._by_key) for rs in self._by_key[key])
@@ -139,20 +170,41 @@ class Resolved:
 
 
 def resolve(provider: RateSetProvider, jurisdiction: str, category: str, as_of: date) -> Resolved:
-    """Find the rate set for ``as_of``, carrying the latest set forward if needed.
+    """Find the rate set for ``as_of``, carrying the latest earlier set forward if needed.
 
-    Raises :class:`~teq_engine.errors.RatesUnavailableError` when nothing covers the date
-    and the latest set starts after it (rates are never applied backwards).
+    When no set covers ``as_of`` the latest set that started on or before it is carried
+    forward, whether ``as_of`` is after every set or in a gap between two sets. Raises
+    :class:`~teq_engine.errors.RatesUnavailableError` only when no set started on or
+    before ``as_of`` (rates are never applied backwards).
     """
     found = provider.get(jurisdiction, category, as_of)
     if found is not None:
         return Resolved(found, carried_forward=False)
-    latest = provider.latest(jurisdiction, category)
-    if latest is not None and latest.effective_from <= as_of:
-        return Resolved(latest, carried_forward=True)
+    earlier = _latest_on_or_before(provider, jurisdiction, category, as_of)
+    if earlier is not None:
+        return Resolved(earlier, carried_forward=True)
     raise RatesUnavailableError(
         f"no {category} rate set for {jurisdiction} covers {as_of.isoformat()}",
         jurisdiction=jurisdiction,
         category=category,
         as_of=as_of,
     )
+
+
+def _latest_on_or_before(
+    provider: RateSetProvider, jurisdiction: str, category: str, as_of: date
+) -> RateSet | None:
+    """The latest set that started on or before ``as_of``, by the best means available."""
+    if isinstance(provider, SupportsLatestOnOrBefore):
+        return provider.latest_on_or_before(jurisdiction, category, as_of)
+    latest = provider.latest(jurisdiction, category)
+    if latest is None:
+        return None
+    if latest.effective_from <= as_of:
+        return latest
+    # A later set exists, so as_of is in a gap or before every set: probe backwards.
+    for days in range(1, GAP_PROBE_DAYS + 1):
+        found = provider.get(jurisdiction, category, as_of - timedelta(days=days))
+        if found is not None:
+            return found
+    return None

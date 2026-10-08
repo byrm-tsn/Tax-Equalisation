@@ -1,8 +1,11 @@
 """Critical path over the applicable timeline stages.
 
 Stages form a dependency graph. Only the stages whose condition holds for the
-answers take part; a dependency on a stage that does not apply is treated as
-already satisfied. The forward and backward passes run twice, once with every
+answers take part. A stage that does not apply passes its own dependencies through
+to the stages that depend on it, so a chain ``A -> B -> C`` with ``B`` not applying
+becomes ``A -> C`` and never loses the ordering. Inherited dependencies already implied
+by another dependency are dropped, so the shown graph stays minimal. The forward and
+backward passes run twice, once with every
 stage's minimum duration and once with its maximum, giving a range in days and
 weeks. The result is never a date.
 """
@@ -28,9 +31,7 @@ def critical_path(pack: GuidancePack, answers: TailoringAnswers | None = None) -
     selected = applicable(pack, answers)
     stages = selected.stages
     ids = {stage.id for stage in stages}
-    dependencies = {
-        stage.id: tuple(dep for dep in stage.depends_on if dep in ids) for stage in stages
-    }
+    dependencies = _effective_dependencies(pack.stages, ids)
     order = _topological_order(stages, dependencies)
 
     min_days = {stage.id: stage.typical_days_min for stage in stages}
@@ -87,6 +88,56 @@ def critical_path(pack: GuidancePack, answers: TailoringAnswers | None = None) -
         parallel_groups=tuple((name, tuple(members)) for name, members in groups.items()),
         not_applicable=tuple(stage.id for stage in pack.stages if stage.id not in ids),
     )
+
+
+def _effective_dependencies(
+    all_stages: Sequence[Stage], applying: set[str]
+) -> dict[str, tuple[str, ...]]:
+    """Dependencies among the applying stages, passing through stages that do not apply.
+
+    A dependency on a stage that does not apply is replaced by that stage's own
+    effective dependencies (transitively). An inherited dependency that is already an
+    ancestor of another dependency of the same stage is dropped as redundant.
+    """
+    declared = {stage.id: stage.depends_on for stage in all_stages}
+    through: dict[str, tuple[str, ...]] = {}
+
+    def resolved(stage_id: str) -> tuple[str, ...]:
+        """The applying stages ``stage_id`` waits for, in declaration order."""
+        if stage_id not in through:
+            through[stage_id] = ()  # the loader has rejected cycles; this guards recursion
+            found: list[str] = []
+            for dep in declared.get(stage_id, ()):
+                for target in (dep,) if dep in applying else resolved(dep):
+                    if target not in found:
+                        found.append(target)
+            through[stage_id] = tuple(found)
+        return through[stage_id]
+
+    ancestors: dict[str, frozenset[str]] = {}
+
+    def ancestors_of(stage_id: str) -> frozenset[str]:
+        if stage_id not in ancestors:
+            ancestors[stage_id] = frozenset()
+            result: set[str] = set()
+            for dep in resolved(stage_id):
+                result.add(dep)
+                result |= ancestors_of(dep)
+            ancestors[stage_id] = frozenset(result)
+        return ancestors[stage_id]
+
+    effective: dict[str, tuple[str, ...]] = {}
+    for stage in all_stages:
+        if stage.id not in applying:
+            continue
+        direct = {dep for dep in stage.depends_on if dep in applying}
+        deps = resolved(stage.id)
+        effective[stage.id] = tuple(
+            dep
+            for dep in deps
+            if dep in direct or not any(dep in ancestors_of(other) for other in deps)
+        )
+    return effective
 
 
 def _topological_order(

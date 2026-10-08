@@ -52,6 +52,7 @@ __all__ = [
     "UkNicData",
     "UkNicEmployee",
     "UkNicEmployer",
+    "content_checksum",
     "parse_rate_set",
 ]
 
@@ -326,18 +327,63 @@ class RateSet:
         return max((s.verified_at for s in self.sources), default=None)
 
 
-def _checksum(envelope: _Envelope, data: BaseModel) -> str:
+def _canonical_checksum(
+    *,
+    schema_version: int,
+    jurisdiction: str,
+    category: RateCategory,
+    label: str,
+    version: int,
+    effective_from: date,
+    effective_to: date | None,
+    data: BaseModel,
+) -> str:
     payload = {
-        "schema_version": envelope.schema_version,
-        "jurisdiction": envelope.jurisdiction,
-        "category": envelope.category.value,
-        "label": envelope.label,
-        "version": envelope.version,
-        "effective_from": envelope.effective_from.isoformat(),
-        "effective_to": envelope.effective_to.isoformat() if envelope.effective_to else None,
+        "schema_version": schema_version,
+        "jurisdiction": jurisdiction,
+        "category": category.value,
+        "label": label,
+        "version": version,
+        "effective_from": effective_from.isoformat(),
+        "effective_to": effective_to.isoformat() if effective_to else None,
         "data": data.model_dump(mode="json"),
     }
     return sha256_prefixed(canonical_json(payload))
+
+
+def _checksum(envelope: _Envelope, data: BaseModel) -> str:
+    return _canonical_checksum(
+        schema_version=envelope.schema_version,
+        jurisdiction=envelope.jurisdiction,
+        category=envelope.category,
+        label=envelope.label,
+        version=envelope.version,
+        effective_from=envelope.effective_from,
+        effective_to=envelope.effective_to,
+        data=data,
+    )
+
+
+def content_checksum(rate_set: RateSet) -> str:
+    """The content checksum of a rate set: its own, else computed from its canonical data.
+
+    :func:`parse_rate_set` always sets ``checksum``; a set built some other way (a test
+    double, a database row without the column) is checksummed here over the same
+    canonical envelope and data, so two sets with the same identifier but different
+    figures never share a checksum.
+    """
+    if rate_set.checksum:
+        return rate_set.checksum
+    return _canonical_checksum(
+        schema_version=rate_set.schema_version,
+        jurisdiction=rate_set.jurisdiction,
+        category=rate_set.category,
+        label=rate_set.label,
+        version=rate_set.version,
+        effective_from=rate_set.effective_from,
+        effective_to=rate_set.effective_to,
+        data=rate_set.data,
+    )
 
 
 def parse_rate_set(raw: Mapping[str, Any], *, origin: str = "<memory>") -> RateSet:

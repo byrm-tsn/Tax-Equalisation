@@ -8,7 +8,7 @@ produced them through ``trace_ref``.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from teq_engine.money import PENNY, engine_context
 from teq_engine.types import TraceStep
@@ -30,9 +30,9 @@ def fmt_number(value: Decimal) -> str:
 
 
 def fmt_money(value: Decimal) -> str:
-    """Render an amount to the penny (``66000.26``)."""
+    """Render an amount to the penny, half-up (``66000.26``)."""
     with engine_context():
-        return str(value.quantize(PENNY))
+        return str(value.quantize(PENNY, rounding=ROUND_HALF_UP))
 
 
 def fmt_percent(rate: Decimal) -> str:

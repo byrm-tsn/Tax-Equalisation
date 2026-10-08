@@ -118,3 +118,23 @@ def test_bisection_and_fixed_point_on_a_simple_function() -> None:
         fixed_point(f, Decimal("21"), max_iterations=2)
     with pytest.raises(SegmentSolveError):
         bisect_increasing(lambda x: Decimal("0") * x, Decimal("1"))
+
+
+def test_worst_segment_is_the_taper_band_with_eight_percent_nics(
+    it_rates: UkIncomeTaxData, nic_rates: UkNicData
+) -> None:
+    # Benefits of 60,000 put total income in the taper band (100,000 to 125,140) while
+    # cash pay between 40,000 and 50,270 is still below the upper earnings limit.
+    problem = GrossUpProblem(Decimal("0"), Decimal("60000"), it_rates, nic_rates)
+    slope = (problem.net(Decimal("46000")) - problem.net(Decimal("45000"))) / 1000
+    assert slope == Decimal("0.32")  # 1 - (0.40 x 1.5 + 0.08)
+    target = problem.net(Decimal("45500"))
+    solution = solve_gross_up(GrossUpProblem(target, Decimal("60000"), it_rates, nic_rates))
+    assert solution.marginal_rate == Decimal("0.68")
+    assert solution.segment_label == "IT 60% (allowance taper) + NIC 8%"
+    # No other segment is flatter: sample the whole range at several benefit levels.
+    for benefits in ("0", "30000", "60000", "100000", "150000"):
+        p = GrossUpProblem(Decimal("0"), Decimal(benefits), it_rates, nic_rates)
+        for gross in range(0, 300_000, 2_500):
+            g = Decimal(gross)
+            assert p.net(g + 1) - p.net(g) >= Decimal("0.32")

@@ -143,3 +143,169 @@ def test_no_float_anywhere(ref_data: dict[str, Any]) -> None:
         raise AssertionError(f"float in JSON: {text}")
 
     json.loads(result.model_dump_json(), parse_float=no_float)
+
+
+# --------------------------------------------------------------------------- identity
+
+
+def _provider_with_edited_rate() -> Any:
+    """The bundled sets with one figure changed under the same id, label and version."""
+    from pathlib import Path
+
+    import yaml
+
+    from teq_engine import BundledProvider
+    from teq_engine.ratesets.schemas import parse_rate_set
+
+    data = Path(__file__).resolve().parents[2] / "src" / "teq_engine" / "ratesets" / "data"
+    raw = yaml.safe_load((data / "gb" / "income_tax_2026_27.yaml").read_text(encoding="utf-8"))
+    raw["data"]["bands"][2]["rate"] = "0.46"
+    edited = parse_rate_set(raw)
+    others = [rs for rs in default_provider().all() if rs.id != edited.id]
+    return BundledProvider([*others, edited])
+
+
+def test_fingerprint_changes_when_a_rate_changes_under_the_same_id(
+    ref_data: dict[str, Any],
+) -> None:
+    inputs = ScenarioInput.model_validate(ref_data)
+    base = calculate(inputs, default_provider(), rates_as_of=AS_OF)
+    edited = calculate(inputs, _provider_with_edited_rate(), rates_as_of=AS_OF)
+    assert edited.rate_set_ids == base.rate_set_ids
+    assert edited.inputs_hash == base.inputs_hash
+    assert edited.totals.total_employer_cost != base.totals.total_employer_cost
+    assert edited.rate_set_fingerprint != base.rate_set_fingerprint
+    assert edited.cache_key != base.cache_key
+
+
+def test_fingerprint_uses_content_checksum_when_a_set_has_none(ref_data: dict[str, Any]) -> None:
+    import dataclasses
+
+    from teq_engine import BundledProvider
+    from teq_engine.calculator import compute_rate_set_fingerprint
+    from teq_engine.ratesets.schemas import content_checksum
+
+    sets = default_provider().all()
+    blank = [dataclasses.replace(rs, checksum="") for rs in sets]
+    assert [content_checksum(rs) for rs in blank] == [rs.checksum for rs in sets]
+    assert compute_rate_set_fingerprint(blank) == compute_rate_set_fingerprint(sets)
+    inputs = ScenarioInput.model_validate(ref_data)
+    assert (
+        calculate(inputs, BundledProvider(blank), rates_as_of=AS_OF).rate_set_fingerprint
+        == calculate(inputs, default_provider(), rates_as_of=AS_OF).rate_set_fingerprint
+    )
+
+
+def test_cache_key_changes_with_the_rates_date(ref_data: dict[str, Any]) -> None:
+    first = _calc(ref_data)
+    later = _calc(ref_data, date(2026, 10, 9))
+    assert later.inputs_hash == first.inputs_hash
+    assert later.rate_set_fingerprint == first.rate_set_fingerprint
+    assert later.totals.total_employer_cost == first.totals.total_employer_cost
+    assert later.cache_key != first.cache_key
+    assert _calc(ref_data).cache_key == first.cache_key
+
+
+# --------------------------------------------------------------------------- FX validation
+
+
+def test_fx_dated_after_the_rates_date_is_refused(ref_data: dict[str, Any]) -> None:
+    from teq_engine import EngineError, ScenarioValidationError
+    from teq_engine.warnings import CATALOGUE, Code
+
+    ref_data["fx"] = dict(FX, as_of="2026-10-09")  # one day after the rates date
+    try:
+        _calc(ref_data)
+    except ScenarioValidationError as exc:
+        error = exc
+    else:  # pragma: no cover - the assertion below reports it
+        raise AssertionError("an FX snapshot from the future was accepted")
+    assert isinstance(error, EngineError)
+    assert error.code == "FX_RATE_IN_FUTURE"
+    assert CATALOGUE[Code.FX_RATE_IN_FUTURE].kind == "error"
+    assert error.loc == ("fx", "as_of")
+    assert error.pointer == "/fx/as_of"
+    assert error.params == {"as_of": "2026-10-09", "rates_as_of": "2026-10-08"}
+    assert "2026-10-09" in error.message
+    # Dated on the rates date itself: accepted.
+    ref_data["fx"] = dict(FX, as_of="2026-10-08")
+    assert _calc(ref_data).year(1).line(LineCode.TOTAL_EMPLOYER_COST) == 188676
+
+
+def _limit_errors(data: dict[str, Any]) -> list[tuple[tuple[Any, ...], str]]:
+    from pydantic import ValidationError
+
+    try:
+        ScenarioInput.model_validate(data)
+    except ValidationError as exc:
+        return [(tuple(e["loc"]), e["msg"]) for e in exc.errors()]
+    return []
+
+
+def test_converted_and_annualised_amounts_respect_the_limit(ref_data: dict[str, Any]) -> None:
+    import copy
+
+    base = copy.deepcopy(ref_data)
+    # A monthly salary that annualises above one billion.
+    data = copy.deepcopy(base)
+    data["salary"] = {"amount": "100000000.00", "currency": "GBP", "frequency": "MONTHLY"}
+    errors = _limit_errors(data)
+    assert errors[0][0] == ("salary", "amount")
+    assert "one billion" in errors[0][1]
+    # At exactly one billion a year it is accepted.
+    data["salary"] = {"amount": "1000000000.00", "currency": "GBP"}
+    assert _limit_errors(data) == []
+    # A lira salary that converts above one billion pounds at an absurd rate.
+    data = copy.deepcopy(base)
+    data["salary"] = {"amount": "90000.00", "currency": "TRY"}
+    data["fx"] = dict(FX, rate="0.00001")
+    data["hypothetical_tax"]["override"] = "1.00"
+    errors = _limit_errors(data)
+    assert any(loc == ("salary", "amount") and "converts to" in msg for loc, msg in errors)
+    # A pound salary that converts above one billion lira.
+    data = copy.deepcopy(base)
+    data["salary"] = {"amount": "20000000.00", "currency": "GBP"}
+    data["fx"] = FX
+    errors = _limit_errors(data)
+    assert any(loc == ("salary", "amount") and "TRY" in msg for loc, msg in errors)
+    # A monthly item that annualises above one billion.
+    data = copy.deepcopy(base)
+    data["items"][1]["frequency"] = "MONTHLY"
+    data["items"][1]["amount"] = "90000000.00"
+    errors = _limit_errors(data)
+    assert ("items", 1, "amount") in [loc for loc, _ in errors]
+    # A gross-equalised item that converts above one billion lira in the Turkish base.
+    data = copy.deepcopy(base)
+    data["items"].append({"id": "bonus", "kind": "BONUS", "amount": "20000000.00"})
+    data["hypothetical_tax"] = {"method": "CALCULATED", "base": "ALL_EQUALISED"}
+    data["salary"]["amount"] = "90000.00"
+    data["fx"] = FX
+    errors = _limit_errors(data)
+    assert ("items", 3, "amount") in [loc for loc, _ in errors]
+    # The same item is not converted when the base is salary only.
+    data["hypothetical_tax"]["base"] = "SALARY_ONLY"
+    assert _limit_errors(data) == []
+
+
+def test_override_pins_the_fx_used_for_the_comparison(ref_data: dict[str, Any]) -> None:
+    assert _calc(ref_data).hypothetical_tax.fx is None  # no snapshot, no comparison
+    ref_data["fx"] = FX
+    hypo = _calc(ref_data).hypothetical_tax
+    assert hypo.calculated_for_comparison == Decimal("34212.20")
+    assert hypo.fx is not None
+    assert (hypo.fx.rate, hypo.fx.as_of.isoformat(), hypo.fx.source) == (
+        Decimal("65.700000"),
+        "2026-10-08",
+        "test",
+    )
+
+
+def test_home_employer_line_is_rounded_once(ref_data: dict[str, Any]) -> None:
+    ref_data["assumptions"]["social_security"] = "HOME_SCHEME_AGREEMENT"
+    ref_data["fx"] = FX
+    result = _calc(ref_data)
+    step = next(s for s in result.trace if s.step == "employer_charges" and s.assignment_year == 1)
+    # 766,956.60 / 65.7 = 11,673.616...: one rounding to the pound.
+    exact = Decimal(step.values["home_employer_try"]) / Decimal("65.7")
+    expected = exact.quantize(Decimal("1"), rounding="ROUND_HALF_UP")
+    assert result.year(1).line(LineCode.HOME_EMPLOYER_SOCIAL_SECURITY) == expected == 11674

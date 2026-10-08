@@ -126,3 +126,28 @@ def test_employer_contribution_at_ceiling(sgk: TrSgkData) -> None:
     assert contribution.amount == Decimal("766956.600")
     zero_incentive = employer_contribution(Decimal("5913000"), sgk, Decimal("0"))
     assert zero_incentive.rate == Decimal("0.235")
+
+
+def test_every_component_serialises_with_two_decimals(
+    tr_it: TrIncomeTaxData, sgk: TrSgkData, stamp: TrStampData
+) -> None:
+    import re
+
+    # At the minimum wage the exemption removes all income tax and the stamp-tax base
+    # is nil: the zero components must still read "0.00", like every other amount.
+    for gross, include_ss in (
+        (Decimal("396360"), True),
+        (Decimal("396360"), False),
+        (Decimal("0"), False),
+        (Decimal("5913000"), True),
+    ):
+        result = _hypo(gross, tr_it, sgk, stamp, include_ss=include_ss)
+        components = result.components  # type: ignore[attr-defined]
+        assert components is not None
+        dumped = components.model_dump(mode="json")
+        for name, value in dumped.items():
+            if name in {"tax_year", "sgk_ceiling_applied"}:
+                continue
+            assert re.fullmatch(r"\d+\.\d{2}", value), (gross, name, value)
+    minimum = _hypo(Decimal("396360"), tr_it, sgk, stamp).components  # type: ignore[attr-defined]
+    assert minimum.model_dump(mode="json")["income_tax_try"] == "0.00"
