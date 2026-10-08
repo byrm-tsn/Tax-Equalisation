@@ -118,3 +118,28 @@ Other figures in the trace: multiple of salary £188,676 / £90,000 = **2.10**; 
 **Indicative Turkish hypothetical tax.** Under the 2026 Turkish rules held in the engine's rate sets, at an indicative 65.7 TRY per GBP: gross TRY 5,913,000; employee SGK TRY 535,086.00 (15% on earnings capped at the ceiling); income tax TRY 1,728,665.60 less the minimum-wage credit TRY 57,881.20 = TRY 1,670,784.40; stamp tax TRY 41,871.30; total TRY 2,247,741.70 = **about £34,200** (£34,212.20), against the reference pack's assumed **£30,000**. The figure moves with the exchange rate and has not been checked against gib.gov.tr; it is shown beside the supplied figure as the most material assumption (`HYPO_TAX_OVERRIDE`).
 
 **Immigration costs for the reference scenario** (kept separate, never added to the figures above): employer-mandatory £3,165 (CoS £525 + Immigration Skills Charge £2,640); applicant side £2,889 (visa fee £819 + health surcharge £2,070), which many employers pay by policy; TB test TRY 3,000 to 5,000 listed separately. Timeline with the licence already held: about 6 to 16 weeks (43 to 112 days); without a licence: about 10 to 21 weeks (70 to 145 days).
+
+## 8. Independent reviews and the fixes they produced
+
+Two adversarial reviews were run on the finished code before the build was accepted, each by a reviewer that had not written the code and was asked to find wrong figures first and style last.
+
+**Engine and guidance review.** Found no wrong figure from the UK tax or National Insurance functions, the breakpoint list or the solver, and re-derived the golden values by hand. It did find fourteen defects, all fixed with regression tests:
+
+- the rate-set fingerprint ignored rate-set content and the rates date, so a cache could have served stale results (fingerprint now covers content checksums, and a `cache_key` includes the rates date);
+- a bonus or other equalised item joined the net guarantee with no hypothetical-tax share (a share now applies when the base is all equalised items, and a warning says so when the base is salary only);
+- the per-move relocation cap could be bypassed by a plain "exempt" treatment (refused);
+- currency conversions used banker's rounding (now half-up);
+- a future-dated exchange rate was accepted and a tiny rate could escape the size cap (both refused);
+- the inputs hash was not canonical (region default, negative zero and year order normalised);
+- guidance costs could not price part years or cap a single grant (months supported, half-year surcharge, 60-month cap);
+- guidance arithmetic depended on the host's decimal context (now local);
+- the relocation split was not traced as two lines (it is);
+- a documented worst-case slope was wrong (corrected to 0.32);
+- a gap between rate sets raised instead of carrying forward (carries forward);
+- timeline dependencies were dropped through inapplicable stages (passed through);
+- boundary tests at the relocation cap and the Turkish contribution ceiling were missing (added);
+- lira components were not consistently two-decimal (they are).
+
+**Web layer review.** Confirmed that templates never mark strings safe, that the content security policy, frame denial and CSRF protection hold, that decompression of the results link is bounded, that the API never leaks a traceback and that immigration costs are never added to the employment cost. It found fourteen presentation and robustness defects, fixed with tests: a relocation excess shown as exempt; home-scheme pages and narrative still mentioning UK National Insurance; the narrative misplacing items by year; extreme rates dates and oversize bodies causing server errors; missing `Cache-Control` and `Permissions-Policy` headers; tampered results links being reflected; the compare view failing near the link size cap; the readiness endpoint exposing error text; duplicated flags; API contract gaps; results links that did not record the engine version; two narrative claims stated unconditionally; and small form and command-line defects.
+
+Both review reports are summarised here rather than reproduced; the tests they led to are in `tests/engine/test_cap_and_ceiling_boundaries.py`, the review cases in `tests/engine/test_calculator.py`, `tests/engine/test_types.py`, `tests/guidance/test_guidance_costs.py`, and `tests/web`.
