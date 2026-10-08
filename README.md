@@ -1,6 +1,6 @@
 # Tax Equalisation Cost Estimator
 
-[![CI](https://github.com/byrm-tsn/Tax-Equalisation/actions/workflows/ci.yml/badge.svg?branch=claude/epic-dijkstra-wb0dj2)](https://github.com/byrm-tsn/Tax-Equalisation/actions/workflows/ci.yml)
+[![CI](https://github.com/byrm-tsn/Tax-Equalisation/actions/workflows/ci.yml/badge.svg)](https://github.com/byrm-tsn/Tax-Equalisation/actions/workflows/ci.yml)
 
 An estimator of what it costs an employer, and how long it takes, to move an employee from Turkey to England for two years under tax equalisation. It grosses up the employee's net guarantee through UK income tax and National Insurance, adds the employer's charges and benefits year by year, sets out the UK Skilled Worker immigration steps, costs and timeline separately, and explains the result in plain English. The worked example in the brief reproduces to the pound. "teq", in the package names, is short for tax equalisation.
 
