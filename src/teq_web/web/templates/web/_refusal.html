@@ -1,0 +1,17 @@
+{# What is supported and what adding the requested route would take. Expects: refusal. #}
+<section class="callout" aria-labelledby="refusal-title">
+  <h2 id="refusal-title">{{ refusal.title }}</h2>
+  <p>{{ refusal.message }}</p>
+  <p>You asked for: <strong>{{ refusal.requested }}</strong>. The tool refuses rather than guessing at the wrong rates.</p>
+  <h3>Supported routes</h3>
+  <ul>
+    {% for route in refusal.supported %}
+      <li>{{ route.description }} <span class="code">{{ route.home }} to {{ route.host }} ({{ route.regions|join:", " }})</span></li>
+    {% endfor %}
+  </ul>
+  <h3>What adding it would require</h3>
+  <ul>
+    {% for requirement in refusal.requirements %}<li>{{ requirement }}</li>{% endfor %}
+  </ul>
+  <p class="code">{{ refusal.code }}</p>
+</section>

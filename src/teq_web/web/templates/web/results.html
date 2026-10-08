@@ -1,0 +1,240 @@
+{% extends "web/base.html" %}
+{% load teq %}
+{% block title %}Results – Tax equalisation cost estimator{% endblock %}
+{% block content %}
+<h1>Employer cost of the assignment</h1>
+<p class="lead">{{ result.route.home }} to {{ result.route.host }} ({{ result.route.region }}), {{ year_count }} year{{ year_count|pluralize }}, rates as at {{ result.rates_as_of|uk_date }}. All amounts in pounds.</p>
+
+<nav class="contents callout no-print" aria-label="On this page">
+  <ol>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#net-guarantee">1. Net guarantee</a></li>
+    <li><a href="#treatment">2. Treatment of each item</a></li>
+    <li><a href="#gross-up">3. Gross-up</a></li>
+    <li><a href="#employer-charges">4. Employer charges</a></li>
+    <li><a href="#per-year">5. Year by year</a></li>
+    <li><a href="#assumptions">6. Assumptions</a></li>
+    <li><a href="#immigration">Immigration</a></li>
+    <li><a href="#narrative">In plain English</a></li>
+    <li><a href="#trace">Calculation trace</a></li>
+    <li><a href="#provenance">Provenance</a></li>
+  </ol>
+</nav>
+
+<section aria-labelledby="headline-title">
+  <h2 id="headline-title" class="visually-hidden">Headline figures</h2>
+  <div class="cards">
+    {% for card in headline %}
+      <div class="card">
+        <div class="label">{{ card.label }}</div>
+        <div class="value">{{ card.value }}</div>
+        <div class="note">{{ card.note }}</div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section id="flags" aria-labelledby="flags-title">
+  <h2 id="flags-title">Flags</h2>
+  <ul class="flags">
+    {% for flag in flags %}
+      <li class="flag flag--{{ flag.severity }}">
+        <span class="badge badge--{{ flag.severity }}">{{ flag.severity }}</span>
+        <strong>{{ flag.title }}</strong>{% if flag.year %} (year {{ flag.year }}){% endif %}
+        <p>{{ flag.text }}</p>
+        <p class="muted">Question: {{ flag.question }} <span class="code">{{ flag.code }}</span></p>
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section id="net-guarantee" aria-labelledby="ng-title">
+  <h2 id="ng-title">1. Net guarantee</h2>
+  <p>What the employee is promised in their pocket each year. The hypothetical Turkish tax was
+    {% if hypothetical_tax.mode == "OVERRIDE" %}supplied as an assumption{% if hypothetical_tax.calculated_for_comparison %} (calculated under the Turkish rules it would be {{ hypothetical_tax.calculated_for_comparison|gbp }}){% endif %}{% else %}calculated under the Turkish rules{% if hypothetical_tax.fx %} at {{ hypothetical_tax.fx.rate|number }} lira to the pound, dated {{ hypothetical_tax.fx.as_of|uk_date }}{% endif %}{% endif %}.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Line</th>{% for header in year_headers %}<th scope="col" class="num">{{ header }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in net_guarantee %}
+          <tr{% if row.strong %} class="strong"{% endif %}><th scope="row">{{ row.label }}</th>{% for value in row.values %}<td class="num">{{ value }}</td>{% endfor %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if hypothetical_tax.components %}
+    {% with c=hypothetical_tax.components %}
+      <details>
+        <summary>How the hypothetical tax was calculated ({{ c.tax_year }} Turkish rules, year 1)</summary>
+        <dl class="values">
+          <dt>Gross salary</dt><dd>TRY {{ c.gross_try|number }}</dd>
+          <dt>Employee social security</dt><dd>TRY {{ c.sgk_try|number }}{% if c.sgk_ceiling_applied %} (capped at the ceiling){% endif %}</dd>
+          <dt>Income tax before the minimum-wage exemption</dt><dd>TRY {{ c.income_tax_before_exemption_try|number }}</dd>
+          <dt>Minimum-wage exemption</dt><dd>TRY {{ c.minimum_wage_exemption_try|number }}</dd>
+          <dt>Income tax</dt><dd>TRY {{ c.income_tax_try|number }}</dd>
+          <dt>Stamp tax</dt><dd>TRY {{ c.stamp_tax_try|number }}</dd>
+          <dt>Total</dt><dd>TRY {{ c.total_try|number }} = {{ c.total_gbp|gbp }}</dd>
+        </dl>
+      </details>
+    {% endwith %}
+  {% endif %}
+</section>
+
+<section id="treatment" aria-labelledby="treatment-title">
+  <h2 id="treatment-title">2. Treatment of each benefit and entitlement</h2>
+  <p>Each item carries one of the reference pack's three labels: taxable cash, taxable benefit in kind, or exempt.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Item</th><th scope="col">Amount</th><th scope="col">Paid in</th><th scope="col">Treatment</th><th scope="col">National Insurance</th><th scope="col">What it means</th></tr></thead>
+      <tbody>
+        {% for row in treatments %}
+          <tr>
+            <th scope="row">{{ row.name }}</th>
+            <td>{{ row.amount }}</td>
+            <td>{{ row.years }}</td>
+            <td><strong>{{ row.label }}</strong><br><span class="code">{{ row.treatment }}</span></td>
+            <td>{{ row.nic }}</td>
+            <td>{{ row.how }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="gross-up" aria-labelledby="grossup-title">
+  <h2 id="grossup-title">3. Gross-up</h2>
+  <p>The employer pays the employee's UK tax, and that payment is itself taxable, so the gross pay is solved exactly:
+    the figure that leaves the net guarantee after income tax and employee National Insurance. It is rounded up to the pound so the guarantee is never short.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Step</th>{% for header in year_headers %}<th scope="col" class="num">{{ header }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in gross_up.rows %}
+          <tr><th scope="row">{{ row.label }}</th>{% for value in row.values %}<td class="num">{{ value }}</td>{% endfor %}</tr>
+        {% endfor %}
+        <tr><th scope="row">Trace step</th>{% for step_id in gross_up.step_ids %}<td class="num"><a href="#{{ step_id }}">{{ step_id }}</a></td>{% endfor %}</tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="employer-charges" aria-labelledby="charges-title">
+  <h2 id="charges-title">4. Employer charges</h2>
+  {% if home_scheme %}
+    <p>The employee stays in the Turkish scheme: no UK employer National Insurance or Class 1A is due, and the Turkish employer contributions are shown instead (an estimate).</p>
+  {% else %}
+    <p>Employer National Insurance on the gross cash pay, and Class 1A National Insurance on the value of taxable benefits.</p>
+  {% endif %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Charge</th>{% for header in year_headers %}<th scope="col" class="num">{{ header }}</th>{% endfor %}<th scope="col" class="num">{{ total_header }}</th></tr></thead>
+      <tbody>
+        {% for row in employer_charges %}
+          <tr><th scope="row">{{ row.label }}</th>{% for value in row.values %}<td class="num">{{ value }}</td>{% endfor %}<td class="num">{{ row.total }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="per-year" aria-labelledby="per-year-title">
+  <h2 id="per-year-title">5. Year by year</h2>
+  <p>Two independent decompositions of the same cost. Every amount is rounded to the pound and the totals are sums of the rounded lines, so both tables add up.</p>
+  {% for section in year_table %}
+    <div class="table-wrap">
+      <table>
+        <caption>{{ section.title }} <span class="muted">({{ section.note }})</span></caption>
+        <thead><tr><th scope="col">Line</th>{% for header in year_headers %}<th scope="col" class="num">{{ header }}</th>{% endfor %}<th scope="col" class="num">{% if section.total %}{{ total_header }}{% endif %}</th></tr></thead>
+        <tbody>
+          {% for row in section.rows %}
+            <tr><th scope="row">{{ row.label }}</th>{% for value in row.values %}<td class="num">{{ value }}</td>{% endfor %}<td class="num">{{ row.total }}</td></tr>
+          {% endfor %}
+          {% if section.total %}
+            <tr class="strong"><th scope="row">{{ section.total.label }}</th>{% for value in section.total.values %}<td class="num">{{ value }}</td>{% endfor %}<td class="num">{{ section.total.total }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+    {% if section.extra.foots %}<p class="muted">Both decompositions give the same total in every year.</p>{% endif %}
+  {% endfor %}
+</section>
+
+<section id="assumptions" aria-labelledby="assumptions-title">
+  <h2 id="assumptions-title">6. Assumptions</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Assumption</th><th scope="col">Question to confirm it</th></tr></thead>
+      <tbody>
+        {% for assumption in assumptions %}
+          <tr><td>{{ assumption.text }} <span class="code">{{ assumption.code }}</span></td><td>{{ assumption.question }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% include "web/_immigration.html" %}
+
+<section id="narrative" class="narrative" aria-labelledby="narrative-title">
+  <h2 id="narrative-title">In plain English</h2>
+  {% for paragraph in narrative %}<p>{{ paragraph }}</p>{% endfor %}
+</section>
+
+<section id="trace" aria-labelledby="trace-title">
+  <h2 id="trace-title">Calculation trace</h2>
+  <details>
+    <summary>Show every step ({{ trace|length }} steps), with HMRC manual references</summary>
+    {% for step in trace %}
+      <div class="trace-step" id="{{ step.id }}">
+        <h3>{{ step.id }}. {{ step.title }}{% if step.year %}, year {{ step.year }}{% endif %}</h3>
+        <p>{{ step.description }}</p>
+        {% if step.refs %}<p class="muted">References: {{ step.refs|join:", " }}</p>{% endif %}
+        <dl class="values">
+          {% for key, value in step.values %}<dt>{{ key }}</dt><dd>{{ value }}</dd>{% endfor %}
+        </dl>
+      </div>
+    {% endfor %}
+  </details>
+</section>
+
+<section id="provenance" aria-labelledby="provenance-title">
+  <h2 id="provenance-title">Provenance</h2>
+  <dl class="values">
+    <dt>Engine version</dt><dd>{{ result.engine_version }} (result schema {{ result.schema_version }})</dd>
+    <dt>Rates as at</dt><dd>{{ result.rates_as_of|uk_date }} ({{ result.rates_as_of|date:"Y-m-d" }})</dd>
+    <dt>Inputs hash</dt><dd class="code">{{ result.inputs_hash }}</dd>
+    <dt>Rate-set fingerprint</dt><dd class="code">{{ result.rate_set_fingerprint }}</dd>
+    <dt>Period mode</dt><dd>{{ result.period_mode }}</dd>
+    <dt>Rounding</dt><dd>gross {{ result.rounding.gross_cash }}, lines {{ result.rounding.lines }}, totals {{ result.rounding.totals }}, ratios {{ result.rounding.ratios }}</dd>
+    <dt>Immigration guidance</dt><dd>{{ panel.pack_id }} version {{ panel.version }}, verified {{ panel.verified_at|uk_date }}</dd>
+    <dt>Disclaimer version</dt><dd>{{ result.disclaimer_version }}</dd>
+  </dl>
+  <div class="table-wrap">
+    <table>
+      <caption>Rate sets used</caption>
+      <thead><tr><th scope="col">Rate set</th><th scope="col">In force</th><th scope="col">Used for</th><th scope="col">Verified</th><th scope="col">Sources</th></tr></thead>
+      <tbody>
+        {% for entry in provenance %}
+          <tr>
+            <td><span class="code">{{ entry.id }}</span><br><span class="muted" title="{{ entry.checksum }}">{{ entry.checksum|short_hash }}</span></td>
+            <td>{{ entry.effective_from|uk_date }} to {% if entry.effective_to %}{{ entry.effective_to|uk_date }}{% else %}open{% endif %}</td>
+            <td>year{{ entry.used_for_years|length|pluralize }} {{ entry.used_for_years|join:", " }}</td>
+            <td>{% if entry.verified_at %}{{ entry.verified_at|uk_date }}{% else %}not recorded{% endif %}</td>
+            <td>{% for url in entry.sources %}<a href="{{ url }}" rel="noopener noreferrer">{{ url }}</a>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<p class="disclaimer">An illustration, not tax or immigration advice. Check the figures with a tax adviser and the immigration steps on GOV.UK before relying on them.</p>
+
+<div class="links">
+  <a class="button secondary" href="{{ edit_url }}">Edit these inputs</a>
+  <a class="button secondary" href="{{ compare_url }}">Compare UK National Insurance with the Turkish scheme</a>
+  <a class="button secondary" href="{{ api_url }}">This result in the API (JSON)</a>
+  <a class="button secondary" href="{% url 'example' %}">Reference example</a>
+</div>
+{% endblock %}

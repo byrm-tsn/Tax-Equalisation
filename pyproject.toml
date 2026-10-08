@@ -21,8 +21,9 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "types-PyYAML",
+    "pytest-django>=4.9",
+    "django-stubs>=5.2",
 ]
-# Installed in a later stage, not now.
 web = [
     "django>=5.2,<5.3",
     "django-ninja>=1.3",
@@ -34,6 +35,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 teq_engine = ["py.typed", "ratesets/data/gb/*.yaml", "ratesets/data/tr/*.yaml"]
 teq_guidance = ["py.typed", "data/*.json"]
+teq_web = ["web/templates/web/*.html", "web/static/web/*.css"]
 
 # ---------------------------------------------------------------- ruff
 [tool.ruff]
@@ -98,5 +100,6 @@ warn_required_dynamic_aliases = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+DJANGO_SETTINGS_MODULE = "teq_web.settings.test"
 addopts = "-ra --strict-markers --strict-config"
 xfail_strict = true

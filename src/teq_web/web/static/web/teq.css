@@ -1,0 +1,131 @@
+/* Tax equalisation cost estimator: one small stylesheet, no frameworks, print-friendly. */
+
+:root {
+  --ink: #1d1d1b;
+  --muted: #5a5a57;
+  --line: #c9c9c4;
+  --paper: #ffffff;
+  --tint: #f4f4f1;
+  --accent: #1f4e79;
+  --error: #b10e1e;
+  --warning: #8a5300;
+  --info: #1f4e79;
+  --ok: #1e6b35;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--paper);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+.wrap { max-width: 72rem; margin: 0 auto; padding: 0 1rem; }
+
+a { color: var(--accent); }
+a:focus, input:focus, select:focus, button:focus, summary:focus {
+  outline: 3px solid #ffbf47;
+  outline-offset: 1px;
+}
+
+.skip-link { position: absolute; left: -999px; }
+.skip-link:focus { left: 1rem; top: 1rem; background: #ffbf47; padding: 0.5rem; }
+
+.site-header { background: var(--accent); color: #fff; padding: 0.75rem 0; }
+.site-header .wrap { display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; justify-content: space-between; }
+.site-header a { color: #fff; }
+.brand { font-weight: 700; font-size: 1.1rem; text-decoration: none; }
+.site-header nav a { margin-left: 1rem; }
+
+.site-footer { border-top: 1px solid var(--line); margin-top: 3rem; padding-top: 1rem; color: var(--muted); }
+
+h1 { font-size: 1.8rem; margin: 1.5rem 0 0.5rem; }
+h2 { font-size: 1.35rem; margin: 2rem 0 0.5rem; border-bottom: 2px solid var(--ink); padding-bottom: 0.25rem; }
+h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+.lead { font-size: 1.1rem; color: var(--muted); }
+.muted, .hint { color: var(--muted); }
+.hint { margin: 0 0 0.25rem; font-size: 0.95rem; }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); border: 0;
+}
+
+.button, button {
+  display: inline-block; background: var(--ok); color: #fff; border: 0;
+  padding: 0.6rem 1.1rem; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none;
+}
+.button.secondary { background: var(--tint); color: var(--ink); border: 1px solid var(--line); }
+.callout { background: var(--tint); border-left: 5px solid var(--accent); padding: 0.75rem 1rem; margin: 1rem 0; }
+.callout.example { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; }
+
+/* ---- forms */
+fieldset { border: 1px solid var(--line); padding: 0.75rem 1rem 1rem; margin: 1rem 0; }
+legend { font-weight: 700; padding: 0 0.25rem; }
+.field { margin: 0.75rem 0; }
+.field label, .field .label { display: block; font-weight: 600; }
+.field--error { border-left: 4px solid var(--error); padding-left: 0.75rem; }
+.error-message { color: var(--error); font-weight: 600; margin: 0.25rem 0; }
+input[type="text"], input[type="number"], input[type="date"], select {
+  font: inherit; padding: 0.35rem 0.5rem; border: 2px solid var(--ink); max-width: 100%;
+}
+input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--error); }
+.choice { margin: 0.25rem 0; }
+.choice label { display: inline; font-weight: 400; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0 1.5rem; }
+.items-table input[type="text"], .items-table select { width: 100%; }
+
+.error-summary { border: 4px solid var(--error); padding: 0.75rem 1rem; margin: 1rem 0; }
+.error-summary h2 { border: 0; margin-top: 0; color: var(--error); }
+.error-summary a { color: var(--error); font-weight: 600; }
+
+/* ---- tables */
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1rem; }
+caption { text-align: left; font-weight: 700; padding: 0.25rem 0; }
+th, td { border-bottom: 1px solid var(--line); padding: 0.4rem 0.5rem; text-align: left; vertical-align: top; }
+thead th { border-bottom: 2px solid var(--ink); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.strong td, tr.strong th { font-weight: 700; border-top: 2px solid var(--ink); }
+
+/* ---- results */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem; margin: 1rem 0; }
+.card { border: 1px solid var(--line); border-top: 5px solid var(--accent); padding: 0.75rem 1rem; }
+.card .value { font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.card .label { font-weight: 600; }
+.card .note { color: var(--muted); font-size: 0.9rem; }
+
+.flags { list-style: none; padding: 0; }
+.flag { border-left: 5px solid var(--info); background: var(--tint); padding: 0.5rem 0.75rem; margin: 0.5rem 0; }
+.flag--error { border-color: var(--error); }
+.flag--warning { border-color: var(--warning); }
+.badge { display: inline-block; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 0 0.35rem; border: 1px solid currentColor; margin-right: 0.35rem; }
+.badge--error { color: var(--error); }
+.badge--warning { color: var(--warning); }
+.badge--info, .badge--assumption { color: var(--info); }
+.code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85rem; color: var(--muted); }
+
+.contents ol { columns: 2; padding-left: 1.25rem; }
+.separate { border: 2px dashed var(--accent); padding: 0.5rem 1rem 1rem; margin-top: 1rem; }
+.narrative p { max-width: 48rem; }
+.links { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1.5rem 0; }
+details { border: 1px solid var(--line); padding: 0.5rem 1rem; margin: 1rem 0; }
+summary { cursor: pointer; font-weight: 700; }
+.trace-step { border-top: 1px solid var(--line); padding: 0.5rem 0; }
+dl.values { display: grid; grid-template-columns: minmax(10rem, max-content) 1fr; gap: 0.1rem 1rem; margin: 0.25rem 0; }
+dl.values dt { color: var(--muted); }
+dl.values dd { margin: 0; font-variant-numeric: tabular-nums; word-break: break-word; }
+.disclaimer { font-weight: 700; border: 2px solid var(--ink); padding: 0.75rem 1rem; }
+
+@media print {
+  .site-header nav, .skip-link, .links, form.tailoring, .no-print, button, .button { display: none !important; }
+  .site-header { background: none; color: var(--ink); border-bottom: 2px solid var(--ink); }
+  .site-header a { color: var(--ink); }
+  body { font-size: 11pt; }
+  a { color: var(--ink); text-decoration: none; }
+  details { border: 0; padding: 0; }
+  details::details-content { content-visibility: visible; display: block; }
+  h2 { break-after: avoid; }
+  table, .card, .flag { break-inside: avoid; }
+}

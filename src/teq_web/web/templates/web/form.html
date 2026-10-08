@@ -1,0 +1,130 @@
+{% extends "web/base.html" %}
+{% block title %}{% if errors %}Error: {% endif %}Inputs – Tax equalisation cost estimator{% endblock %}
+{% block content %}
+<h1>What does this assignment cost the employer?</h1>
+<p class="lead">Enter the package for an employee moving from Turkey to England under tax equalisation.
+  The tool grosses up the net guarantee through UK income tax and National Insurance, adds the employer's charges and shows the immigration steps separately.</p>
+
+<div class="callout example">
+  <p>New here? Start from the reference pack's worked example: salary £90,000, hypothetical tax £30,000, allowance, housing and relocation, for two years.</p>
+  <a class="button" href="{% url 'example' %}">Load the reference example</a>
+</div>
+
+{% if link_error %}
+  <div class="error-summary" role="alert">
+    <h2>The link could not be read</h2>
+    <p>{{ link_error }} The form below starts empty.</p>
+  </div>
+{% endif %}
+
+{% if errors %}
+  <div class="error-summary" role="alert" aria-labelledby="error-summary-title" tabindex="-1">
+    <h2 id="error-summary-title">There is a problem</h2>
+    <ul>
+      {% for error in errors %}<li><a href="#{{ error.anchor }}">{{ error.message }}</a></li>{% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+{% if refusal %}{% include "web/_refusal.html" %}{% endif %}
+
+<form method="post" action="{% url 'form' %}" id="scenario-form" novalidate>
+  {% csrf_token %}
+
+  <fieldset>
+    <legend>Route</legend>
+    <div class="grid">
+      {% include "web/_field.html" with field=form.home_country %}
+      {% include "web/_field.html" with field=form.host_country %}
+      {% include "web/_field.html" with field=form.region %}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Assignment</legend>
+    <div class="grid">
+      {% include "web/_field.html" with field=form.length_years %}
+      {% include "web/_field.html" with field=form.rates_as_of %}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Salary</legend>
+    <div class="grid">
+      {% include "web/_field.html" with field=form.salary_amount %}
+      {% include "web/_field.html" with field=form.salary_currency %}
+      {% include "web/_field.html" with field=form.salary_frequency %}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Hypothetical home tax</legend>
+    <p class="hint">Tax equalisation takes off the tax the employee would have paid in Turkey, then the employer pays the UK tax.</p>
+    {% include "web/_radios.html" with field=form.hypo_method %}
+    <div class="grid">
+      {% include "web/_field.html" with field=form.hypo_override %}
+      {% include "web/_field.html" with field=form.hypo_base %}
+    </div>
+    <div class="field{% if form.hypo_includes_social_security.errors %} field--error{% endif %}">
+      {% for error in form.hypo_includes_social_security.errors %}<p class="error-message">{{ error }}</p>{% endfor %}
+      <div class="choice">{{ form.hypo_includes_social_security }} <label for="{{ form.hypo_includes_social_security.id_for_label }}">{{ form.hypo_includes_social_security.label }}</label></div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Package (amounts in pounds; leave blank if not paid)</legend>
+    <div class="grid">
+      {% include "web/_field.html" with field=form.cola_amount %}
+      {% include "web/_field.html" with field=form.housing_amount %}
+      {% include "web/_field.html" with field=form.housing_contribution %}
+      {% include "web/_field.html" with field=form.relocation_amount %}
+    </div>
+  </fieldset>
+
+  <fieldset id="items">
+    <legend>Additional items (optional, up to {{ formset.max_num }})</legend>
+    <p class="hint">For example a bonus, school fees or home leave. Years: ALL, or year numbers such as 1 or 1, 2. Leave a row blank to ignore it.</p>
+    {{ formset.management_form }}
+    {% for error in formset.non_form_errors %}<p class="error-message">{{ error }}</p>{% endfor %}
+    <div class="table-wrap">
+      <table class="items-table">
+        <thead>
+          <tr><th scope="col">Kind</th><th scope="col">Description</th><th scope="col">Amount (£)</th><th scope="col">Paid</th><th scope="col">Years</th><th scope="col">Treatment</th></tr>
+        </thead>
+        <tbody>
+          {% for row in formset %}
+            <tr id="item-row-{{ forloop.counter0 }}">
+              {% for field in row %}
+                <td class="{% if field.errors %}field--error{% endif %}">
+                  <label class="visually-hidden" for="{{ field.id_for_label }}">Item {{ forloop.parentloop.counter }}: {{ field.label }}</label>
+                  {% for error in field.errors %}<p class="error-message">{{ error }}</p>{% endfor %}
+                  {{ field }}
+                </td>
+              {% endfor %}
+            </tr>
+            {% if row.non_field_errors %}
+              <tr><td colspan="6">{% for error in row.non_field_errors %}<p class="error-message">Item {{ forloop.parentloop.counter }}: {{ error }}</p>{% endfor %}</td></tr>
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Social security</legend>
+    {% include "web/_radios.html" with field=form.social_security %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Exchange rate</legend>
+    <div class="grid">
+      {% include "web/_field.html" with field=form.fx_rate %}
+      {% include "web/_field.html" with field=form.fx_date %}
+      {% include "web/_field.html" with field=form.fx_source %}
+    </div>
+  </fieldset>
+
+  <button type="submit">Calculate the cost</button>
+</form>
+{% endblock %}

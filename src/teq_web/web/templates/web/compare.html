@@ -1,0 +1,36 @@
+{% extends "web/base.html" %}
+{% load teq %}
+{% block title %}Compare social security – Tax equalisation cost estimator{% endblock %}
+{% block content %}
+<h1>UK National Insurance or the Turkish scheme</h1>
+<p class="lead">The same scenario calculated both ways. Under the social security agreement the employee may stay in the Turkish scheme with a certificate of coverage: UK National Insurance and Class 1A go, and the Turkish employer contributions that continue are shown as their own line.</p>
+
+{% for column in columns %}
+  {% if column.problem %}<p class="flag flag--warning"><strong>{{ column.title }}:</strong> {{ column.problem }}</p>{% endif %}
+{% endfor %}
+
+{% if rows %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th scope="col">Year</th><th scope="col">Line</th>{% for column in columns %}<th scope="col" class="num">{% if column.url %}<a href="{{ column.url }}">{{ column.title }}</a>{% else %}{{ column.title }}{% endif %}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr{% if row.strong %} class="strong"{% endif %}>
+            <td>{% if row.year %}{{ row.year }}{% else %}All{% endif %}</td>
+            <th scope="row">{{ row.label }}</th>
+            {% for value in row.values %}<td class="num">{% if value is None %}–{% elif row.ratio %}{{ value }}{% else %}{{ value|gbp }}{% endif %}</td>{% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+<p class="disclaimer">An illustration, not tax or immigration advice.</p>
+<div class="links">
+  <a class="button secondary" href="{{ results_url }}">Back to the results</a>
+  <a class="button secondary" href="{{ edit_url }}">Edit these inputs</a>
+</div>
+{% endblock %}

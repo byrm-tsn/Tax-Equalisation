@@ -420,7 +420,7 @@ src/teq_guidance/              # pure immigration guidance package (stdlib only)
   data/tr_gb_skilled_worker.json
 src/teq_web/                   # Django project
   settings/{base,dev,test,prod}.py urls.py wsgi.py
-  apps/{accounts, refdata, scenarios, immigration, sharing, audit, narration, api, web, ops}/
+  {web, scenarios, api, ops, narration}/ in the slice; accounts, refdata, immigration, sharing and audit are added in Horizon B
 tests/{engine, golden, guidance, api, tenancy, web, postgres}/  tests/golden/*.json
 ```
 

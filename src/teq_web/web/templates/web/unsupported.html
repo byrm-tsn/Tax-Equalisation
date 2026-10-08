@@ -1,0 +1,10 @@
+{% extends "web/base.html" %}
+{% block title %}Not supported – Tax equalisation cost estimator{% endblock %}
+{% block content %}
+<h1>{{ refusal.title }}</h1>
+{% include "web/_refusal.html" %}
+<div class="links">
+  <a class="button secondary" href="{% url 'form' %}?s={{ token|urlencode }}">Edit these inputs</a>
+  <a class="button secondary" href="{% url 'example' %}">Reference example</a>
+</div>
+{% endblock %}

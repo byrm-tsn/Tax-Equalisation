@@ -1,0 +1,12 @@
+{% extends "web/base.html" %}
+{% block title %}{{ title }} – Tax equalisation cost estimator{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p>{{ message }}</p>
+<p>No figures are shown.</p>
+<div class="links">
+  {% if token %}<a class="button secondary" href="{% url 'form' %}?s={{ token|urlencode }}">Edit these inputs</a>{% endif %}
+  <a class="button secondary" href="{% url 'form' %}">Start from the input form</a>
+  <a class="button secondary" href="{% url 'example' %}">Reference example</a>
+</div>
+{% endblock %}

@@ -19,7 +19,7 @@ Before the demo: start the app (see the README), open `/example` in one tab and 
 Open `/example` (the reference scenario: salary £90,000, hypothetical tax £30,000, cost-of-living allowance £6,000 net, housing £30,000, relocation £8,000 in year 1).
 
 1. **Headline.** Year 1 **£188,676**, year 2 **£180,676**, total **£369,352**, 2.10 times salary. These match the reference pack to the pound.
-2. **Flags.** The social security agreement may apply; the hypothetical tax was supplied rather than calculated (under the 2026 Turkish rules it would be about £34,200); 2027/28 rates are not yet published, so 2026/27 rates are carried forward.
+2. **Flags.** The social security agreement may apply; the hypothetical tax was supplied rather than calculated; 2027/28 rates are not yet published, so 2026/27 rates are carried forward. The reference example carries no exchange rate, so the calculated comparison is not shown here; enter a rate (for example 65.7 lira per pound at 15 September 2026) and the page adds the 2026 Turkish calculation, about £34,200, beside the £30,000 override.
 3. **Net guarantee.** £90,000 less £30,000 hypothetical tax, plus the £6,000 net allowance: £66,000 in the employee's pocket each year.
 4. **Item treatment.** The reference pack's three labels: taxable cash (the allowance, grossed up), taxable benefit in kind (housing: income tax and Class 1A, no employee NICs), exempt (relocation, within the £8,000 cap per move).
 5. **Gross-up.** Gross cash £127,762. Every extra pound here is taxed at 45% plus 2% NICs, so delivering £66,000 net takes £127,762 gross; the guarantee is never under-delivered (the employee actually gets £66,000.26).

@@ -1,0 +1,7 @@
+{# One labelled form field with its hint and inline errors. Expects: field. #}
+<div class="field{% if field.errors %} field--error{% endif %}">
+  <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+  {% if field.help_text %}<p class="hint" id="{{ field.auto_id }}_helptext">{{ field.help_text }}</p>{% endif %}
+  {% for error in field.errors %}<p class="error-message" id="{{ field.auto_id }}_error"><span class="visually-hidden">Error:</span> {{ error }}</p>{% endfor %}
+  {{ field }}
+</div>

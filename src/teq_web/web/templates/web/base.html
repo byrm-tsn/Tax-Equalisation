@@ -1,0 +1,29 @@
+{% load static %}<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Tax equalisation cost estimator{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'web/teq.css' %}">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the main content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="{% url 'form' %}">Tax equalisation cost estimator</a>
+      <nav aria-label="Main">
+        <a href="{% url 'form' %}">Inputs</a>
+        <a href="{% url 'example' %}">Reference example</a>
+        <a href="{% url 'api-v1:openapi-view' %}">API</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main" class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer wrap">
+    <p><strong>An illustration, not tax or immigration advice.</strong>
+      Rates, fees and processing times change; each source and verification date is shown with the result.</p>
+  </footer>
+</body>
+</html>
