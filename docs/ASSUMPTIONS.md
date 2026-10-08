@@ -79,7 +79,7 @@ Every requirement, document, cost, stage and note in the guidance pack carries o
 
 ### Assumptions when a tailoring question is unanswered
 
-The panel works with no answers at all. Each unanswered question uses the value below, and the panel lists it under "what we would need to tailor this further" with the assumption it made.
+The panel works with no answers at all. Each unanswered question uses the value below, and the panel data lists it under "what we would need to tailor this further" with the assumption it made; on the Immigration tab each question shows its assumed answer, and the main ones are named in the line above the collapsed tailoring form.
 
 | Question | Assumed if unanswered | Effect if different |
 |---|---|---|
@@ -114,7 +114,7 @@ The panel works with no answers at all. Each unanswered question uses the value 
 | Code | Kind | What it means | What to check |
 |---|---|---|---|
 | `RATES_UNAVAILABLE` | error | No rate table covers the date asked for and none can be carried forward to it. | Is the rates date inside a period the bundled tables cover? |
-| `RATES_NOT_PUBLISHED_FOR_YEAR` | warning | Rates for a later assignment year are not yet published, so the latest published year's rates are carried forward. This is why the reference pack's year 2 equals year 1 apart from relocation. | Recalculate when the later rates are published. |
+| `RATES_NOT_PUBLISHED_FOR_YEAR` | info | Rates for a later assignment year are not yet published, so the latest published year's rates are carried forward. This is why the reference pack's year 2 equals year 1 apart from relocation. Turkish rates are flagged only when the scenario uses them (a calculated hypothetical tax or home-scheme social security); under a supplied hypothetical tax they do not affect the figures. | Recalculate when the later rates are published. |
 | `RATES_UNCHANGED_LATER_YEARS` | assumption | Rates for years not yet published are assumed unchanged from the latest published year. UK thresholds are in fact frozen to 2030/31. | As above. |
 | `RATE_SET_SUPERSEDED` | info | Newer rules have been approved since a saved result was calculated (production only). | Rerun the scenario under the current rules? |
 | `FX_RATE_USER_SUPPLIED` | info | The exchange rate used, its date and its source are pinned to the result, so it can be reproduced later. | Is this the rate to use? |

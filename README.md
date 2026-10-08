@@ -24,9 +24,10 @@ The web paths and commands below are the intended contract; if any differ in the
 
 | Path | What it shows |
 |---|---|
-| `/` | Input form: route, assignment length, salary, hypothetical tax, compensation items, assumptions |
-| `/example` | Loads the reference scenario and shows its results |
-| `/estimate?s=...` | Results for the encoded inputs (reloadable and shareable without a database) |
+| `/` | Input form: route, assignment length, salary, hypothetical tax (calculated from the Turkish rules by default, at an indicative exchange rate to confirm), compensation items, assumptions |
+| `/example` | Loads the reference scenario and shows its results (the Tax tab) |
+| `/estimate?s=...&tab=...` | Results for the encoded inputs (reloadable and shareable without a database), one tab per request: `tab=tax` (the default: headline, summary, things to check, the five steps, assumptions), `tab=immigration` (process, documents, costs with who pays, timeline, family, tailoring) or `tab=explain` (the plain-English explanation, the calculation trace and provenance). Tailoring answers in the query string carry across the tabs |
+| `/compare?s=...` | The same scenario under UK National Insurance and under the Turkish scheme, side by side |
 
 ### API
 
@@ -71,6 +72,15 @@ panel = build_panel(TailoringAnswers.reference_example())
 panel["costs"]["subtotals_display"]["employer_mandatory"]   # '£3,165'
 panel["timeline"]["total_text"]                              # 'about 6 to 16 weeks (43 to 112 days)'
 ```
+
+## How to add a country or route
+
+1. **Rate sets.** Add the rates as YAML under `src/teq_engine/ratesets/data/<jurisdiction>/` (as `gb/income_tax_2026_27.yaml` and `tr/sgk_2026.yaml` do), each with its effective dates, sources and verification date; `src/teq_engine/ratesets/schemas.py` validates them when the provider loads. Write jurisdiction functions under `src/teq_engine/jurisdictions/<code>/` only where the rules differ in shape, not just in numbers: a Scottish income tax set reuses the UK functions, while a new home country needs its own hypothetical-tax module like `jurisdictions/tr/hypo.py`.
+2. **Route registry.** Add the route to `SUPPORTED_ROUTES` and `_SPECS` in `src/teq_engine/routes/registry.py`, mapping it to its rate-set jurisdictions. The refusal page, the form's refusal message and `GET /api/v1/routes` read the registry, so they update themselves; the names shown in prose are in `src/teq_web/scenarios/capability.py`.
+3. **Guidance pack.** Add a JSON pack under `src/teq_guidance/data/` (start from `tr_gb_skilled_worker.json`: sources, tailoring questions, requirements, stages, documents, costs with their payers), list its file in `_PACK_FILES` in `src/teq_guidance/loader.py`, and select it for the route in `build_immigration` in `src/teq_web/scenarios/services.py` (with one route, the Turkey to UK pack is always used). The loader refuses an inconsistent pack and names every problem.
+4. **Golden case.** Add a case under `tests/golden/` with the inputs and the figures recomputed by hand; `tests/engine/test_golden.py` runs every file there.
+
+The templates and the API need no change; the form needs one only for a country code that is not already in its lists (`_HOME_CODES` and `_HOST_CODES` in `src/teq_web/scenarios/forms.py`).
 
 ## Project layout
 

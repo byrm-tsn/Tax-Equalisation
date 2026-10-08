@@ -12,11 +12,13 @@ mypy src/teq_engine       # strict typing on the engine (src/teq_guidance is als
 
 ---
 
-**Test counts at the time of writing:** 606 in total: 273 engine (including the golden corpus and the review boundary cases), 106 guidance, 227 web. `ruff check`, `ruff format --check` and strict `mypy` on the engine and guidance packages are clean; `mypy src/teq_web` is also clean.
+**Test counts at the time of writing:** 671 in total: 279 engine (including the golden corpus and the review boundary cases), 109 guidance, 283 web. `ruff check`, `ruff format --check` and strict `mypy` on the engine and guidance packages are clean; `mypy src/teq_web` is also clean.
 
 ## 1. Golden figures (engine)
 
 The golden corpus in `tests/golden/*.json` holds inputs, expected figures and the engine version for each case; `tests/engine` runs it. A numeric difference fails the build unless the golden files, the engine version and the change log move together.
+
+**Engine 0.2.0** (8 October 2026) changed no figure: `RATES_NOT_PUBLISHED_FOR_YEAR` became info rather than warning and names Turkish rates only when the scenario uses them (a calculated hypothetical tax or home-scheme social security), a supplied hypothetical tax whose comparison uses carried-forward Turkish rates says so in its note, and the marginal-cost line reads "Cost to the employer of £1 more net pay"; the golden files moved to 0.2.0 with it.
 
 | Case | What it pins |
 |---|---|
@@ -40,7 +42,7 @@ Thresholds are read from the rate sets and tested at the value and one penny eit
 
 ## 4. Guidance tests (`tests/guidance`)
 
-The immigration guidance package is tested separately (106 tests at the time of writing):
+The immigration guidance package is tested separately (109 tests at the time of writing):
 
 - **Pack loads and validates.** The bundled pack loads; its question ids are exactly the `TailoringAnswers` fields; every item cites a known GOV.UK source; every cost has a basis, a payer, a verification level and a date; every employer cost is marked as not recoverable from the worker. Validation rejects, and reports together, an unknown dependency, a dependency cycle, a condition on an unknown question (including inside a fee tier), a condition value that is not one of the question's options, a cost without a basis or payer, an unknown basis, an unknown source, an item with no source, a bare number where an amount should be a string, an unknown verification level and a wrong route.
 - **Reference scenario costs.** Visa 2 years, applied for outside the UK, medium or large sponsor, licence already held, no dependants, resident in Turkey: Certificate of Sponsorship £525, Immigration Skills Charge £2,640 (£1,320 for the first 12 months plus £660 x 2 further 6-month periods), visa fee £819, health surcharge £2,070 (£1,035 x 2 years). Employer-mandatory subtotal £3,165; applicant side £2,889 (of which the employer may pay by policy £2,889); the TB test is listed separately in lira (TRY 3,000 to 5,000) and is not added.
@@ -57,8 +59,8 @@ The rehearsal, from a fresh clone, in under ten minutes:
 2. Open `/example`: the headline shows year 1 £188,676, year 2 £180,676, total £369,352.
 3. Change housing (for example to £36,000) and resubmit: the gross-up, Class 1A and totals move; the per-year table still foots.
 4. Flip the NIC coverage toggle to home-scheme: UK NICs and Class 1A go to zero and the Turkish employer contribution line appears with its warning.
-5. Open the immigration panel: costs with payers and formulas, subtotals, documents with reasons, the critical-path timeline as a range, the verified date and sources.
-6. Open the calculation trace: the segment ("IT 45% + NIC 2%"), marginal rate 0.47, exact gross £127,761.51, rounded £127,762, net delivered £66,000.26.
+5. Open the Immigration tab: the process in order, documents with reasons, costs with payers and formulas, subtotals, the critical-path timeline as a range, family, the verified date and sources.
+6. On the Explain tab, open the calculation trace: the segment ("IT 45% + NIC 2%"), marginal rate 0.47, exact gross £127,761.51, rounded £127,762, net delivered £66,000.26.
 7. `python src/manage.py estimate --example` prints the same figures as the page.
 8. Request Scotland or another route: the capability message, not a number.
 
