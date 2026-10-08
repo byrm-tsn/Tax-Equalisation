@@ -366,7 +366,7 @@ class ScenarioForm(forms.Form):
         initial=SalaryFrequency.ANNUAL.value,
     )
     hypo_method = forms.ChoiceField(
-        label="Hypothetical home tax",
+        label="How is the hypothetical tax set?",
         widget=forms.RadioSelect,
         choices=[
             (HypoTaxMethod.OVERRIDE.value, "Use a figure I supply"),
@@ -411,7 +411,7 @@ class ScenarioForm(forms.Form):
         help_text="Exempt up to £8,000 per move; any excess is taxed as a benefit.",
     )
     social_security = forms.ChoiceField(
-        label="Social security",
+        label="Which scheme does the employee pay into?",
         widget=forms.RadioSelect,
         choices=[
             (SocialSecurityMode.UK_NIC.value, "UK National Insurance applies"),

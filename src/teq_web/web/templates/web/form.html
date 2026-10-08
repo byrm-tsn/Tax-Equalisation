@@ -72,7 +72,8 @@
   </fieldset>
 
   <fieldset>
-    <legend>Package (amounts in pounds; leave blank if not paid)</legend>
+    <legend>Package</legend>
+    <p class="hint">Amounts in pounds a year unless stated. Leave a box blank if the item is not paid.</p>
     <div class="grid">
       {% include "web/_field.html" with field=form.cola_amount %}
       {% include "web/_field.html" with field=form.housing_amount %}
@@ -125,6 +126,9 @@
     </div>
   </fieldset>
 
-  <button type="submit">Calculate the cost</button>
+  <div class="actions">
+    <button type="submit">Calculate the cost</button>
+    <a class="button secondary" href="{% url 'example' %}">Load the reference example instead</a>
+  </div>
 </form>
 {% endblock %}

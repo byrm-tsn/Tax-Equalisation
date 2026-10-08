@@ -1,5 +1,5 @@
 {# A radio group as a fieldset with a legend and inline errors. Expects: field. #}
-<fieldset id="{{ field.auto_id }}" class="{% if field.errors %}field--error{% endif %}">
+<fieldset id="{{ field.auto_id }}" class="radios{% if field.errors %} field--error{% endif %}">
   <legend>{{ field.label }}</legend>
   {% if field.help_text %}<p class="hint">{{ field.help_text }}</p>{% endif %}
   {% for error in field.errors %}<p class="error-message"><span class="visually-hidden">Error:</span> {{ error }}</p>{% endfor %}
