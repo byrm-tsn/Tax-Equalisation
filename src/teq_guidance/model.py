@@ -153,7 +153,11 @@ class RouteNote:
 
 @dataclass(frozen=True, slots=True)
 class Requirement:
-    """An eligibility requirement: ``general`` (everyone) or ``circumstance``."""
+    """An eligibility requirement: ``general`` (everyone) or ``circumstance``.
+
+    ``topic`` optionally groups requirements for display (``family`` for partners and
+    children applying as dependants); it never changes whether one applies.
+    """
 
     id: str
     category: str
@@ -163,6 +167,7 @@ class Requirement:
     sources: tuple[str, ...]
     condition: Condition | None = None
     why_it_applies: str = ""
+    topic: str = ""
 
 
 @dataclass(frozen=True, slots=True)

@@ -58,14 +58,18 @@ def test_year_two_and_total(result: CalculationResult) -> None:
 
 
 def test_carry_forward_warnings_name_years(result: CalculationResult) -> None:
+    # The override means the Turkish rate sets are not used, so only the UK line appears,
+    # and it is information: the pack itself assumes year-2 rates are unchanged.
     carried = [w for w in result.warnings if w.code == "RATES_NOT_PUBLISHED_FOR_YEAR"]
-    assert len(carried) == 2
-    assert all(w.assignment_year == 2 for w in carried)
-    texts = " ".join(w.text for w in carried)
-    assert "2027-28" in texts
-    assert "2026-27" in texts
-    assert "Turkish rates for 2027" in texts
-    assert "the 2026 rates" in texts
+    assert len(carried) == 1
+    (line,) = carried
+    assert line.assignment_year == 2
+    assert line.severity == "info"
+    assert line.params["jurisdiction"] == "UK"
+    assert "2027-28" in line.text
+    assert "2026-27" in line.text
+    assert "Turkish" not in line.text
+    assert not [w for w in result.warnings if w.severity in ("error", "warning")]
 
 
 def test_segment_solve_matches_oracles_to_the_penny(
@@ -176,7 +180,7 @@ def test_result_shape_matches_appendix_a(result: CalculationResult) -> None:
     ):
         assert key in data, key
     assert data["schema_version"] == "1"
-    assert data["engine_version"] == "0.1.0"
+    assert data["engine_version"] == "0.2.0"
     assert data["status"] == "OK"
     assert data["rates_as_of"] == "2026-10-08"
     assert data["period_mode"] == "ILLUSTRATIVE_WHOLE_YEAR"
@@ -240,7 +244,7 @@ def test_cache_key_combines_the_four_identity_fields(result: CalculationResult) 
     assert result.cache_key == sha256_prefixed(
         canonical_json(
             {
-                "engine_version": "0.1.0",
+                "engine_version": "0.2.0",
                 "inputs_hash": result.inputs_hash,
                 "rate_set_fingerprint": result.rate_set_fingerprint,
                 "rates_as_of": "2026-10-08",

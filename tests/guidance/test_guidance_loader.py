@@ -206,3 +206,19 @@ def test_reports_every_problem_at_once(raw_pack: dict[str, Any]) -> None:
 def test_rejects_wrong_route(raw_pack: dict[str, Any]) -> None:
     raw_pack["route"] = "IN-GB"
     assert any("does not match" in p for p in _problems(raw_pack))
+
+
+def test_requirements_may_carry_a_family_topic(pack: GuidancePack) -> None:
+    topics = {item.id: item.topic for item in pack.requirements}
+    assert {rid for rid, topic in topics.items() if topic == "family"} == {
+        "partner_dependant",
+        "child_dependants",
+        "no_dependants_temporary_shortage_list",
+    }
+    assert topics["salary_threshold"] == ""
+
+
+def test_rejects_an_unknown_requirement_topic(raw_pack: dict[str, Any]) -> None:
+    _find(raw_pack["requirements"], "partner_dependant")["topic"] = "pets"
+    problems = _problems(raw_pack)
+    assert any("topic: 'pets' is not one of family" in p for p in problems)

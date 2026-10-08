@@ -1,7 +1,7 @@
 {
   "name": "reference_example",
   "description": "The pack's worked example: Turkey to England, two years, salary 90,000, hypothetical tax 30,000 (override), net COLA 6,000, housing 30,000 as a taxable benefit, relocation 8,000 in year 1. Reproduces the pack to the pound.",
-  "engine_version": "0.1.0",
+  "engine_version": "0.2.0",
   "rates_as_of": "2026-10-08",
   "inputs": {
     "route": {

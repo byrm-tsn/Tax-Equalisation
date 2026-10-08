@@ -57,6 +57,9 @@ _ITEM_VERIFICATIONS = frozenset(
 
 _REQUIREMENT_CATEGORIES = frozenset({"general", "circumstance"})
 
+#: Optional display groups for requirements.
+_REQUIREMENT_TOPICS = frozenset({"family"})
+
 _REQUIRED_TOP_LEVEL = (
     "route",
     "version",
@@ -425,6 +428,10 @@ class _Parser:
             if category == "general" and condition is not None:
                 self.problem(f"{where}: a general requirement cannot have a condition")
             why = self.text(obj, "why_it_applies", where, required=condition is not None)
+            topic = self.text(obj, "topic", where, required=False)
+            if topic and topic not in _REQUIREMENT_TOPICS:
+                allowed = ", ".join(sorted(_REQUIREMENT_TOPICS))
+                self.problem(f"{where}.topic: {topic!r} is not one of {allowed}")
             requirements.append(
                 Requirement(
                     id=self.text(obj, "id", where),
@@ -435,6 +442,7 @@ class _Parser:
                     sources=self.source_ids(obj, where),
                     condition=condition,
                     why_it_applies=why,
+                    topic=topic,
                 )
             )
         return tuple(requirements)

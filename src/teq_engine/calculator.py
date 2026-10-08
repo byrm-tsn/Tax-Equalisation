@@ -125,7 +125,7 @@ LINE_LABELS: Final[dict[LineCode, str]] = {
     LineCode.HOME_EMPLOYER_SOCIAL_SECURITY: "Turkish employer social security (estimated)",
     LineCode.TOTAL_EMPLOYER_COST: "Total employer cost",
     LineCode.MULTIPLE_OF_SALARY: "Multiple of salary",
-    LineCode.MARGINAL_COST_PER_NET_POUND: "Employer cost of one more net pound",
+    LineCode.MARGINAL_COST_PER_NET_POUND: "Cost to the employer of £1 more net pay",
 }
 
 # Lines that add up across years in the totals block.
@@ -171,6 +171,10 @@ class _YearRates:
     @property
     def uk(self) -> tuple[Resolved, ...]:
         return (self.uk_income_tax, self.uk_nic, self.uk_benefits)
+
+    def used(self, *, turkish: bool) -> tuple[Resolved, ...]:
+        """The sets the year's figures depend on: the Turkish ones only when consumed."""
+        return self.all() if turkish else self.uk
 
     @property
     def tr(self) -> tuple[Resolved, ...]:
@@ -264,6 +268,20 @@ def _check_fx_date(inputs: ScenarioInput, rates_as_of: date) -> None:
     text, _ = render(Code.FX_RATE_IN_FUTURE, params)
     raise ScenarioValidationError(
         text, code=Code.FX_RATE_IN_FUTURE.value, loc=("fx", "as_of"), params=params
+    )
+
+
+def _uses_turkish_rates(inputs: ScenarioInput) -> bool:
+    """Whether the Turkish rate sets feed the figures in every year.
+
+    They do when the hypothetical tax is calculated or the employee stays in the Turkish
+    scheme. Under an override with the UK scheme they are not used (an override with an
+    exchange rate uses the year-1 sets for the comparison note only), so carrying them
+    forward is not worth a flag.
+    """
+    return (
+        inputs.hypothetical_tax.method is HypoTaxMethod.CALCULATED
+        or inputs.assumptions.social_security is SocialSecurityMode.HOME_SCHEME_AGREEMENT
     )
 
 
@@ -702,6 +720,7 @@ def _calculate(
 
     # ---- rate sets, with carry-forward flagged per year
     years = [_resolve_year(provider, route, period) for period in plan.periods]
+    turkish_used = _uses_turkish_rates(inputs)
     for year_rates in years:
         period = year_rates.period
         if any(r.carried_forward for r in year_rates.uk):
@@ -712,7 +731,7 @@ def _calculate(
                 period=f"tax year {period.primary.uk_tax_year}",
                 proxy=_proxy_label(year_rates.uk),
             )
-        if any(r.carried_forward for r in year_rates.tr):
+        if turkish_used and any(r.carried_forward for r in year_rates.tr):
             collector.warn(
                 Code.RATES_NOT_PUBLISHED_FOR_YEAR,
                 assignment_year=period.assignment_year,
@@ -720,7 +739,7 @@ def _calculate(
                 period=str(period.primary.tr_calendar_year),
                 proxy=_proxy_label(year_rates.tr),
             )
-    carried_any = any(r.carried_forward for y in years for r in y.all())
+    carried_any = any(r.carried_forward for y in years for r in y.used(turkish=turkish_used))
     year1 = years[0]
 
     # ---- route-level information
@@ -895,9 +914,11 @@ def _calculate(
     if override is not None:
         note = ""
         if override.calculated_for_comparison is not None:
+            carried = _proxy_label(year1.tr)
+            suffix = f" ({carried} Turkish rates carried forward)" if carried else ""
             note = (
                 " Calculated under the Turkish rules at the FX snapshot it would be "
-                f"£{fmt_money_text(override.calculated_for_comparison)}."
+                f"£{fmt_money_text(override.calculated_for_comparison)}{suffix}."
             )
         collector.assume(
             Code.HYPO_TAX_OVERRIDE, amount=fmt_money(override.amount), comparison_note=note
@@ -1237,7 +1258,9 @@ def _calculate_year(
         tr_calendar_year=period.primary.tr_calendar_year,
         fraction=period.primary.fraction,
         rate_set_ids=year_rates.ids,
-        rates_carried_forward=any(res.carried_forward for res in year_rates.all()),
+        rates_carried_forward=any(
+            res.carried_forward for res in year_rates.used(turkish=_uses_turkish_rates(inputs))
+        ),
         net_guarantee=guarantee,
         gross_up=gross_up,
         lines=tuple(lines),

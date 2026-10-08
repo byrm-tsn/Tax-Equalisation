@@ -313,6 +313,7 @@ def _eligibility(pack: GuidancePack, selected: Applicable) -> Plain:
             "id": item.id,
             "title": item.title,
             "text": item.text,
+            "topic": item.topic,
             **_verified(item.verification),
             "sources": _sources(pack, item.sources),
         }

@@ -1,7 +1,7 @@
 {
   "name": "home_scheme_social_security",
   "description": "Reference example with the employee kept in the Turkish scheme: UK NICs and Class 1A are zero; the Turkish employer contribution (21.5% of the 297,270 TRY monthly ceiling x 12 = 766,956.60 TRY at 65.7) is added as its own line.",
-  "engine_version": "0.1.0",
+  "engine_version": "0.2.0",
   "rates_as_of": "2026-10-08",
   "inputs": {
     "route": {

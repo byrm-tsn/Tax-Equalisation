@@ -1,7 +1,7 @@
 {
   "name": "below_personal_allowance",
   "description": "Salary 10,000 with hypothetical tax 500: the net target 9,500 is below the personal allowance and the primary threshold, so gross equals net; employer NICs apply above the 5,000 secondary threshold.",
-  "engine_version": "0.1.0",
+  "engine_version": "0.2.0",
   "rates_as_of": "2026-10-08",
   "inputs": {
     "route": {

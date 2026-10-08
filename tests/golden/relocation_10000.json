@@ -1,7 +1,7 @@
 {
   "name": "relocation_10000",
   "description": "Reference example with relocation of 10,000: 8,000 exempt, the 2,000 excess becomes a taxable benefit with Class 1A of 300.",
-  "engine_version": "0.1.0",
+  "engine_version": "0.2.0",
   "rates_as_of": "2026-10-08",
   "inputs": {
     "route": {

@@ -70,6 +70,8 @@ def test_catalogue_is_appendix_b_plus_documented_extras() -> None:
     assert set(CATALOGUE) == set(Code)
     assert CATALOGUE[Code.FX_RATE_IN_FUTURE].kind == "error"
     assert CATALOGUE[Code.EQUALISED_ITEM_NO_HYPO_SHARE].kind == "warning"
+    # Carried-forward rates are the pack's own assumption, so they inform, not warn.
+    assert CATALOGUE[Code.RATES_NOT_PUBLISHED_FOR_YEAR].kind == "info"
 
 
 @pytest.mark.parametrize("code", list(Code))

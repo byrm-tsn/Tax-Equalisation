@@ -277,6 +277,7 @@
     {
       "id": "partner_dependant",
       "category": "circumstance",
+      "topic": "family",
       "title": "Partner as a dependant",
       "text": "A partner may apply as a dependant, paying their own application fee and health surcharge. Unless the sponsor certifies maintenance, a further £285 must be shown.",
       "condition": {"question": "dependants_adults", "gte": 1},
@@ -287,6 +288,7 @@
     {
       "id": "child_dependants",
       "category": "circumstance",
+      "topic": "family",
       "title": "Children as dependants",
       "text": "Children under 18 may apply as dependants, each paying their own application fee and the child rate of the health surcharge. Unless the sponsor certifies maintenance, £315 must be shown for the first child and £200 for each further child.",
       "condition": {"question": "dependants_children", "gte": 1},
@@ -297,6 +299,7 @@
     {
       "id": "no_dependants_temporary_shortage_list",
       "category": "circumstance",
+      "topic": "family",
       "title": "No dependants for Temporary Shortage List jobs",
       "text": "Workers sponsored in occupations on the Temporary Shortage List (below RQF level 6) cannot bring dependants. This matters only if the job is one of those occupations.",
       "verification": "from_knowledge",

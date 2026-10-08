@@ -109,6 +109,90 @@ def test_one_year_has_no_carry_forward(ref_data: dict[str, Any]) -> None:
     assert "RATES_UNCHANGED_LATER_YEARS" not in result.assumption_codes()
 
 
+def _carried(result: Any, jurisdiction: str) -> list[Any]:
+    return [
+        w
+        for w in result.warnings
+        if w.code == "RATES_NOT_PUBLISHED_FOR_YEAR" and w.params["jurisdiction"] == jurisdiction
+    ]
+
+
+def test_turkish_carry_forward_flagged_when_hypothetical_tax_is_calculated(
+    ref_data: dict[str, Any],
+) -> None:
+    ref_data["hypothetical_tax"] = {"method": "CALCULATED"}
+    ref_data["fx"] = FX
+    result = _calc(ref_data)
+    (turkish,) = _carried(result, "Turkish")
+    assert turkish.assignment_year == 2
+    assert turkish.severity == "info"
+    assert "Turkish rates for 2027" in turkish.text
+    assert "the 2026 rates" in turkish.text
+    assert len(_carried(result, "UK")) == 1
+    assert result.year(2).rates_carried_forward
+
+
+def test_turkish_carry_forward_flagged_under_the_home_scheme(ref_data: dict[str, Any]) -> None:
+    ref_data["assumptions"]["social_security"] = "HOME_SCHEME_AGREEMENT"
+    ref_data["fx"] = FX
+    result = _calc(ref_data)
+    assert [w.assignment_year for w in _carried(result, "Turkish")] == [2]
+
+
+def test_override_without_fx_does_not_flag_turkish_rates(ref_data: dict[str, Any]) -> None:
+    assert ref_data["hypothetical_tax"]["method"] == "OVERRIDE"
+    ref_data["assignment"]["length_years"] = 3
+    result = _calc(ref_data)
+    assert _carried(result, "Turkish") == []
+    assert [w.assignment_year for w in _carried(result, "UK")] == [2, 3]
+    # Listing the unused sets in the provenance is harmless; the cache key is unchanged.
+    assert "TR_SGK:2026:v1" in result.rate_set_ids
+
+
+def test_override_scenario_started_in_2027_reports_only_what_it_used(
+    ref_data: dict[str, Any],
+) -> None:
+    # 15 January 2027 is in UK tax year 2026-27 (published) but Turkish year 2027 (not).
+    ref_data["assignment"]["start_date"] = "2027-01-15"
+    ref_data["assignment"]["length_years"] = 1
+    result = _calc(ref_data)
+    assert not result.year(1).rates_carried_forward
+    assert "RATES_NOT_PUBLISHED_FOR_YEAR" not in _codes(result)
+    assert "RATES_UNCHANGED_LATER_YEARS" not in result.assumption_codes()
+    # The same dates with a calculated hypothetical tax do use the carried Turkish sets.
+    ref_data["hypothetical_tax"] = {"method": "CALCULATED"}
+    ref_data["fx"] = FX
+    calculated = _calc(ref_data)
+    assert calculated.year(1).rates_carried_forward
+    assert [w.assignment_year for w in _carried(calculated, "Turkish")] == [1]
+    assert "RATES_UNCHANGED_LATER_YEARS" in calculated.assumption_codes()
+
+
+def test_override_comparison_notes_carried_forward_turkish_rates(
+    ref_data: dict[str, Any],
+) -> None:
+    ref_data["assignment"]["start_date"] = "2027-01-15"
+    ref_data["fx"] = FX
+    result = _calc(ref_data)
+    assert _carried(result, "Turkish") == []
+    override = next(a for a in result.assumptions if a.code == "HYPO_TAX_OVERRIDE")
+    assert "£34,212.20 (2026 Turkish rates carried forward)." in override.text
+    # A 2026 start uses the published 2026 sets for the comparison: no suffix.
+    ref_data["assignment"]["start_date"] = None
+    plain = next(a for a in _calc(ref_data).assumptions if a.code == "HYPO_TAX_OVERRIDE")
+    assert "carried forward" not in plain.text
+    assert "£34,212.20." in plain.text
+
+
+def test_marginal_cost_line_label(ref_data: dict[str, Any]) -> None:
+    line = next(
+        line
+        for line in _calc(ref_data).year(1).lines
+        if line.code == LineCode.MARGINAL_COST_PER_NET_POUND
+    )
+    assert line.label == "Cost to the employer of £1 more net pay"
+
+
 def test_warnings_are_ordered_by_severity(ref_data: dict[str, Any]) -> None:
     order = {"error": 0, "warning": 1, "info": 2}
     severities = [order[w.severity] for w in _calc(ref_data).warnings]

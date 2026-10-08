@@ -201,7 +201,7 @@ _ENTRIES: Final = (
     ),
     _e(
         Code.RATES_NOT_PUBLISHED_FOR_YEAR,
-        "warning",
+        "info",
         "Rates not yet published",
         "Assignment year {year}: {jurisdiction} rates for {period} are not published; the "
         "{proxy} rates have been carried forward.",

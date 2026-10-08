@@ -1,7 +1,7 @@
 {
   "name": "unsupported_route_gb_tr",
   "description": "Route GB to TR is refused with a typed error naming the supported routes.",
-  "engine_version": "0.1.0",
+  "engine_version": "0.2.0",
   "rates_as_of": "2026-10-08",
   "inputs": {
     "route": {

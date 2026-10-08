@@ -215,3 +215,16 @@ def test_reference_pack_comparison_and_sources(panel: dict[str, object]) -> None
     assert isinstance(sources, list)
     assert all(source["url"].startswith("https://www.gov.uk/") for source in sources)
     assert panel["employer_responsibilities"]
+
+
+def test_eligibility_entries_carry_their_topic(panel: dict[str, object]) -> None:
+    eligibility = panel["eligibility"]
+    assert isinstance(eligibility, dict)
+    entries = [*eligibility["general"], *eligibility["circumstance_dependent"]]
+    family = [entry["id"] for entry in entries if entry["topic"] == "family"]
+    assert family == [
+        "partner_dependant",
+        "child_dependants",
+        "no_dependants_temporary_shortage_list",
+    ]
+    assert all(entry["topic"] in ("", "family") for entry in entries)
