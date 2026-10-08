@@ -32,7 +32,7 @@ Change housing from £30,000 to £36,000 and resubmit. Year 1 becomes **£201,43
 
 ### 4:30 to 5:30: flip the NIC toggle
 
-Switch social security to the home scheme (staying in the Turkish scheme under the agreement). UK employee NICs, employer NICs and Class 1A drop to zero, and the gross-up falls because employee NICs no longer need grossing up. A new line shows the Turkish employer contributions that continue, with a warning that they are estimated and an assumption that a certificate of coverage is needed. Point: without that line the toggle would make the assignment look about £23,000 a year cheaper than it is.
+First enter an exchange rate on the form (65.7 lira per pound, dated 15 September 2026), which this mode needs for the Turkish employer line, then switch social security to the home scheme (staying in the Turkish scheme under the agreement). The compare page (`/compare`) shows both positions side by side once a rate is present. UK employee NICs, employer NICs and Class 1A drop to zero, and the gross-up falls because employee NICs no longer need grossing up. A new line shows the Turkish employer contributions that continue, with a warning that they are estimated and an assumption that a certificate of coverage is needed. Point: without that line the toggle would make the assignment look about £23,000 a year cheaper than it is.
 
 ### 5:30 to 7:30: the immigration panel
 
