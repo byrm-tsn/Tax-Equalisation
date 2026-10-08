@@ -1,4 +1,4 @@
-"""Schemas for rate-set data (plan Appendix C).
+"""Schemas for rate-set data (the format in docs/ARCHITECTURE.md, Appendix C).
 
 A rate set is an envelope (jurisdiction, category, label, version, effective dates,
 sources, checksum) around category-specific ``data``. Amounts and rates are strings in

@@ -19,9 +19,12 @@ type Answer = bool | int | str | None
 class Verification(StrEnum):
     """How a fact in the pack was verified."""
 
-    SEARCH_CONFIRMED = "search_confirmed"
-    THIRD_PARTY_REPORTED = "third_party_reported"
-    FROM_KNOWLEDGE = "from_knowledge"
+    #: Traced to the wording of the official page.
+    OFFICIAL_SOURCE = "official_source"
+    #: Reported by third parties; not yet confirmed on the official page.
+    THIRD_PARTY = "third_party"
+    #: Stated from general knowledge of the rules; not re-verified.
+    UNVERIFIED = "unverified"
     #: Only used in the reference-pack comparison table, for arithmetic.
     COMPUTED = "computed"
 

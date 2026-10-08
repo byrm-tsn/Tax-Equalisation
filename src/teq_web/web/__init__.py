@@ -1,1 +1,1 @@
-"""HTML pages: the input form, the results page and the unsupported-route page."""
+"""HTML pages: the input form, the result tabs, the compare view and the refusal pages."""

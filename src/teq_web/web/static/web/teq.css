@@ -118,7 +118,7 @@ tr.strong td, tr.strong th { font-weight: 700; border-top: 2px solid var(--ink);
 .badge--info, .badge--assumption { color: var(--info); }
 .code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85rem; color: var(--muted); }
 
-.contents ol { columns: 2; padding-left: 1.25rem; }
+.contents ul { columns: 2; list-style: none; padding-left: 0; }
 .separate { border: 2px dashed var(--accent); padding: 0.5rem 1rem 1rem; margin-top: 1rem; }
 .narrative p { max-width: 48rem; }
 .links { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1.5rem 0; }

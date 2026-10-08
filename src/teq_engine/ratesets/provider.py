@@ -2,8 +2,8 @@
 
 The engine asks a :class:`RateSetProvider` for the rate set of a jurisdiction and
 category in force on a date. :class:`BundledProvider` reads the YAML files packaged
-under ``ratesets/data``; a database-backed provider (later stage) implements the same
-protocol.
+under ``ratesets/data``; the database-backed provider of the production design would
+implement the same protocol.
 
 :func:`resolve` adds the carry-forward rule: when no set covers a date, the latest set
 that started on or before it is used and the caller emits

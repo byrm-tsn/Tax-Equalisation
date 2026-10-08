@@ -52,7 +52,7 @@ SUPPORTED_CURRENCIES = frozenset({"GBP", "TRY"})
 
 #: Verification levels allowed on pack items (``computed`` is for the comparison table).
 _ITEM_VERIFICATIONS = frozenset(
-    {Verification.SEARCH_CONFIRMED, Verification.THIRD_PARTY_REPORTED, Verification.FROM_KNOWLEDGE}
+    {Verification.OFFICIAL_SOURCE, Verification.THIRD_PARTY, Verification.UNVERIFIED}
 )
 
 _REQUIREMENT_CATEGORIES = frozenset({"general", "circumstance"})
@@ -245,7 +245,7 @@ class _Parser:
         return default
 
     def verification(self, obj: Mapping[str, object], where: str) -> Verification:
-        level = self.enum(Verification, obj, "verification", where, Verification.FROM_KNOWLEDGE)
+        level = self.enum(Verification, obj, "verification", where, Verification.UNVERIFIED)
         if level not in _ITEM_VERIFICATIONS:
             self.problem(
                 f"{where}.verification: {level.value!r} is only allowed in the comparison table"
@@ -628,7 +628,7 @@ class _Parser:
                     current_position=self.text(obj, "current_position", where),
                     effect_on_tool=self.text(obj, "effect_on_tool", where),
                     verification=self.enum(
-                        Verification, obj, "verification", where, Verification.FROM_KNOWLEDGE
+                        Verification, obj, "verification", where, Verification.UNVERIFIED
                     ),
                 )
             )

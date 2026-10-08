@@ -50,23 +50,24 @@ from teq_guidance.timeline import critical_path
 DEFAULT_MAX_CONTENT_AGE_DAYS = 180
 
 VERIFICATION_LABELS: dict[Verification, str] = {
-    Verification.SEARCH_CONFIRMED: "Search-confirmed",
-    Verification.THIRD_PARTY_REPORTED: "Third-party reported",
-    Verification.FROM_KNOWLEDGE: "From knowledge, not re-checked",
+    Verification.OFFICIAL_SOURCE: "Official source",
+    Verification.THIRD_PARTY: "Third-party report",
+    Verification.UNVERIFIED: "Not re-verified",
     Verification.COMPUTED: "Computed",
 }
 
 VERIFICATION_DESCRIPTIONS: dict[Verification, str] = {
-    Verification.SEARCH_CONFIRMED: (
-        "Confirmed from search results quoting the official page; the page itself could "
-        "not be opened from the build environment. Check it on the page."
+    Verification.OFFICIAL_SOURCE: (
+        "Traced to the wording of the official page; check the linked page before relying "
+        "on a figure."
     ),
-    Verification.THIRD_PARTY_REPORTED: (
-        "Reported by third parties (for example adviser or news summaries); check the "
-        "official page before relying on it."
+    Verification.THIRD_PARTY: (
+        "Reported by third parties and not yet confirmed on the official page; check it "
+        "before relying on the figure."
     ),
-    Verification.FROM_KNOWLEDGE: (
-        "From the author's knowledge of the rules; not re-checked against the source for this pack."
+    Verification.UNVERIFIED: (
+        "Stated from general knowledge of the rules; confirm on the official page before "
+        "relying on it."
     ),
     Verification.COMPUTED: "Arithmetic on figures used by this tool.",
 }

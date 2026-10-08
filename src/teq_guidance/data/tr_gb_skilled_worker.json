@@ -159,7 +159,7 @@
       "id": "skilled_worker_assumes_uk_employer",
       "title": "Which route this covers",
       "text": "This guidance covers the Skilled Worker route. It assumes the UK entity employs the worker and assigns the Certificate of Sponsorship.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_overview"]
     },
     {
@@ -167,7 +167,7 @@
       "title": "If the Turkish employer posts the worker",
       "text": "If the Turkish employer keeps the employment and posts the worker to the UK, the Global Business Mobility Senior or Specialist Worker route may be the relevant one instead. It has different salary rules and does not lead to settlement. Who employs the worker also bears on the social security position (UK National Insurance or continued Turkish cover). This is a note, not a decision: an immigration adviser should confirm the route.",
       "condition": {"question": "employer_of_record", "in": ["turkish_employer_posts", "undecided"]},
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_gbm_senior_specialist", "gov_sw_overview"]
     }
   ],
@@ -177,7 +177,7 @@
       "category": "general",
       "title": "Job offer from a licensed sponsor",
       "text": "The applicant needs a job offer from a UK employer that holds a Home Office sponsor licence.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_eligibility", "gov_sponsorship"]
     },
     {
@@ -185,7 +185,7 @@
       "category": "general",
       "title": "Certificate of Sponsorship",
       "text": "The sponsor assigns a Certificate of Sponsorship (CoS), an electronic record with a reference number that the applicant quotes in the application.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_eligibility", "gov_sw_documents"]
     },
     {
@@ -193,7 +193,7 @@
       "category": "general",
       "title": "Eligible occupation at RQF level 6",
       "text": "The job must be on the list of eligible occupations at RQF level 6 (graduate level) or above. This has applied to new applications since 22 July 2025. The occupation code decides it.",
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "sources": ["gov_sw_your_job"]
     },
     {
@@ -201,7 +201,7 @@
       "category": "general",
       "title": "Salary threshold, basic pay only",
       "text": "The salary must be at least £41,700 a year or the going rate for the occupation, whichever is higher. Only guaranteed basic gross pay counts: allowances (including housing and cost-of-living allowances), benefits in kind, bonuses, and employer pension or National Insurance contributions do not count.",
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "sources": ["gov_sw_your_job"]
     },
     {
@@ -209,7 +209,7 @@
       "category": "general",
       "title": "English at level B2",
       "text": "For applications made on or after 8 January 2026, English must be at CEFR level B2 in reading, writing, speaking and listening, proven by a Secure English Language Test from an approved provider or by a degree taught in English with Ecctis confirmation.",
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "sources": ["gov_sw_english"]
     },
     {
@@ -217,7 +217,7 @@
       "category": "general",
       "title": "Valid passport",
       "text": "A valid passport or other travel document showing identity and nationality.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_documents"]
     },
     {
@@ -225,7 +225,7 @@
       "category": "general",
       "title": "Online application and biometrics",
       "text": "The application is made online from outside the UK, after which the applicant gives fingerprints and a photograph (biometrics) at a visa application centre.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_apply_outside"]
     },
     {
@@ -233,7 +233,7 @@
       "category": "general",
       "title": "Immigration Health Surcharge",
       "text": "The Immigration Health Surcharge is paid as part of the application, for each year of the visa (see the costs table).",
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "sources": ["gov_sw_costs"]
     },
     {
@@ -243,7 +243,7 @@
       "text": "A tuberculosis (TB) test certificate from a Home Office-approved clinic is needed when the applicant has lived in a listed country, which includes Turkey, for 6 months or more immediately before applying. In Turkey the approved clinics are in Istanbul and Ankara.",
       "condition": {"question": "tb_listed_resident", "equals": true},
       "why_it_applies": "The applicant has lived in Turkey, a country on the TB test list, for 6 months or more immediately before applying.",
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "sources": ["gov_tb", "gov_tb_turkey"]
     },
     {
@@ -253,7 +253,7 @@
       "text": "Needed only for jobs in listed occupations in education, health and social care: a certificate from each country the applicant has lived in for 12 months or more in the last 10 years.",
       "condition": {"question": "occupation_sector", "in": ["education", "healthcare", "social_care"]},
       "why_it_applies": "The job is in education, healthcare or social care, where listed occupations need a criminal record certificate.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_documents"]
     },
     {
@@ -263,7 +263,7 @@
       "text": "The applicant must have held £1,270 for 28 consecutive days before applying, unless the sponsor certifies maintenance on the Certificate of Sponsorship.",
       "condition": {"question": "sponsor_certifies_maintenance", "equals": false},
       "why_it_applies": "The sponsor will not certify maintenance, so the applicant must show the funds.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_eligibility"]
     },
     {
@@ -271,7 +271,7 @@
       "category": "circumstance",
       "title": "Reduced salary thresholds",
       "text": "Lower salary thresholds exist for new entrants (from £33,400), for jobs that need a relevant PhD, and for occupations on the Immigration Salary List. This tool states that they exist; it does not decide whether one applies.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_your_job"]
     },
     {
@@ -282,7 +282,7 @@
       "text": "A partner may apply as a dependant, paying their own application fee and health surcharge. Unless the sponsor certifies maintenance, a further £285 must be shown.",
       "condition": {"question": "dependants_adults", "gte": 1},
       "why_it_applies": "A partner will apply as a dependant.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_family"]
     },
     {
@@ -293,7 +293,7 @@
       "text": "Children under 18 may apply as dependants, each paying their own application fee and the child rate of the health surcharge. Unless the sponsor certifies maintenance, £315 must be shown for the first child and £200 for each further child.",
       "condition": {"question": "dependants_children", "gte": 1},
       "why_it_applies": "At least one child will apply as a dependant.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_family"]
     },
     {
@@ -302,7 +302,7 @@
       "topic": "family",
       "title": "No dependants for Temporary Shortage List jobs",
       "text": "Workers sponsored in occupations on the Temporary Shortage List (below RQF level 6) cannot bring dependants. This matters only if the job is one of those occupations.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_family", "gov_sw_your_job"]
     }
   ],
@@ -311,63 +311,63 @@
       "id": "hold_licence",
       "title": "Hold a sponsor licence",
       "text": "Hold a sponsor licence before assigning any Certificate of Sponsorship. Since the April 2024 rule change a licence no longer needs renewing every 4 years.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sponsorship"]
     },
     {
       "id": "genuine_vacancy",
       "title": "Genuine vacancy",
       "text": "Sponsor only a genuine vacancy that meets the skill and salary rules, with the job described accurately on the certificate.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sponsorship"]
     },
     {
       "id": "pay_threshold_every_period",
       "title": "Pay at least the threshold in every pay period",
       "text": "Pay at least the salary threshold, from guaranteed basic pay, in every pay period, not just on average over the year.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sponsorship", "gov_sw_your_job"]
     },
     {
       "id": "right_to_work_checks",
       "title": "Right-to-work checks",
       "text": "Check the worker's right to work before employment starts, using the Home Office online service and the worker's share code, and keep a dated record of the check.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sponsorship"]
     },
     {
       "id": "record_keeping",
       "title": "Record keeping",
       "text": "Keep the records the sponsor guidance requires for each sponsored worker, such as contact details, right-to-work evidence, and pay and absence records.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sponsorship"]
     },
     {
       "id": "report_changes",
       "title": "Report changes within 10 working days",
       "text": "Report specified changes on the sponsor management system within 10 working days, for example a worker not starting, unauthorised absence, a change of job or salary, or the employment ending.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sponsorship"]
     },
     {
       "id": "key_personnel",
       "title": "Key personnel",
       "text": "Appoint suitable key personnel (an Authorising Officer, a Key Contact and at least one Level 1 User) to run the licence on the sponsor management system.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sponsorship"]
     },
     {
       "id": "compliance_visits",
       "title": "Compliance visits",
       "text": "Cooperate with Home Office compliance visits, which can happen before or after a licence is granted and may be unannounced.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sponsorship"]
     },
     {
       "id": "no_cost_recovery",
       "title": "Costs the worker must not bear",
       "text": "The Immigration Skills Charge must never be recovered from the worker. Since 31 December 2024 the sponsor licence fee and the Certificate of Sponsorship fee cannot be passed to the worker either.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sponsorship"]
     }
   ],
@@ -382,7 +382,7 @@
       "typical_days_max": 70,
       "condition": {"question": "sponsor_licence_held", "equals": false},
       "alternative_note": "The range assumes the standard service (about 8 weeks). A priority service, decided in about 10 working days for about £750 extra, may be available in limited numbers.",
-      "verification": "third_party_reported",
+      "verification": "third_party",
       "sources": ["gov_sponsorship"]
     },
     {
@@ -393,7 +393,7 @@
       "depends_on": [],
       "typical_days_min": 3,
       "typical_days_max": 10,
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_your_job"]
     },
     {
@@ -404,7 +404,7 @@
       "depends_on": ["sponsor_licence", "job_definition"],
       "typical_days_min": 1,
       "typical_days_max": 5,
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sponsorship"]
     },
     {
@@ -418,7 +418,7 @@
       "typical_days_max": 42,
       "condition": {"question": "english_evidence", "equals": "selt"},
       "parallel_group": "applicant_preparation",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_english"]
     },
     {
@@ -432,7 +432,7 @@
       "typical_days_max": 14,
       "condition": {"question": "tb_listed_resident", "equals": true},
       "parallel_group": "applicant_preparation",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_tb", "gov_tb_turkey"]
     },
     {
@@ -444,7 +444,7 @@
       "typical_days_min": 7,
       "typical_days_max": 21,
       "parallel_group": "applicant_preparation",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_documents"]
     },
     {
@@ -456,7 +456,7 @@
       "depends_on": ["assign_cos", "english_test", "tb_test", "documents"],
       "typical_days_min": 7,
       "typical_days_max": 21,
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_apply_outside"]
     },
     {
@@ -469,7 +469,7 @@
       "typical_days_max": 21,
       "condition": {"question": "application_location", "equals": "outside_uk"},
       "alternative_note": "Where available, priority (about 5 working days, about £500) or super priority (by the next working day, about £1,000) shortens this stage.",
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "sources": ["gov_sw_overview"]
     },
     {
@@ -482,7 +482,7 @@
       "typical_days_max": 56,
       "condition": {"question": "application_location", "equals": "inside_uk"},
       "alternative_note": "Where available, priority or super priority services shorten this stage for an extra fee.",
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "sources": ["gov_sw_overview"]
     },
     {
@@ -494,7 +494,7 @@
       "depends_on": ["decision_outside_uk", "decision_inside_uk"],
       "typical_days_min": 7,
       "typical_days_max": 28,
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_overview", "gov_sponsorship"]
     }
   ],
@@ -504,7 +504,7 @@
       "title": "Valid passport or travel document",
       "text": "A current passport or other valid travel document, with a blank page for a vignette if one is issued.",
       "why_it_applies": "Every Skilled Worker application needs one.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_documents"]
     },
     {
@@ -512,7 +512,7 @@
       "title": "Certificate of Sponsorship reference number",
       "text": "The reference number the sponsor gives the applicant after assigning the certificate.",
       "why_it_applies": "Every Skilled Worker application quotes one.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_documents"]
     },
     {
@@ -520,7 +520,7 @@
       "title": "Job details",
       "text": "Job title, annual salary, occupation code, and the employer's name and sponsor licence number, as shown on the certificate.",
       "why_it_applies": "The application asks for them for every Skilled Worker.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_documents"]
     },
     {
@@ -528,7 +528,7 @@
       "title": "Certified translations",
       "text": "A certified translation of any document that is not in English or Welsh.",
       "why_it_applies": "Turkish-language documents, such as civil records, need a translation.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_documents"]
     },
     {
@@ -537,7 +537,7 @@
       "text": "A pass at CEFR level B2 in a Secure English Language Test from an approved provider.",
       "condition": {"question": "english_evidence", "equals": "selt"},
       "why_it_applies": "English will be shown with a test, and applications from 8 January 2026 need level B2.",
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "sources": ["gov_sw_english"]
     },
     {
@@ -546,7 +546,7 @@
       "text": "The degree certificate and Ecctis confirmation that the degree was taught in English.",
       "condition": {"question": "english_evidence", "equals": "degree_taught_in_english"},
       "why_it_applies": "English will be shown with a degree taught in English instead of a test.",
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "sources": ["gov_sw_english"]
     },
     {
@@ -555,7 +555,7 @@
       "text": "The passport shows nationality of a majority English-speaking country, which meets the English requirement.",
       "condition": {"question": "english_evidence", "equals": "exempt_nationality"},
       "why_it_applies": "The applicant is a national of a majority English-speaking country.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_english"]
     },
     {
@@ -564,7 +564,7 @@
       "text": "A certificate from a Home Office-approved clinic in Istanbul or Ankara, issued within 6 months before the application.",
       "condition": {"question": "tb_listed_resident", "equals": true},
       "why_it_applies": "The applicant has lived in Turkey, a country on the TB test list, for 6 months or more immediately before applying.",
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "sources": ["gov_tb", "gov_tb_turkey"]
     },
     {
@@ -579,7 +579,7 @@
         ]}
       ]},
       "why_it_applies": "Dependants are applying and the family has lived in a TB-test country.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_tb"]
     },
     {
@@ -588,7 +588,7 @@
       "text": "A certificate from each country the applicant has lived in for 12 months or more in the last 10 years.",
       "condition": {"question": "occupation_sector", "in": ["education", "healthcare", "social_care"]},
       "why_it_applies": "The job is in education, healthcare or social care, where listed occupations need one.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_documents"]
     },
     {
@@ -597,7 +597,7 @@
       "text": "Bank statements showing £1,270 held for 28 consecutive days, ending no more than 31 days before the application.",
       "condition": {"question": "sponsor_certifies_maintenance", "equals": false},
       "why_it_applies": "The sponsor will not certify maintenance on the certificate.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_eligibility"]
     },
     {
@@ -612,7 +612,7 @@
         ]}
       ]},
       "why_it_applies": "Dependants are applying and the sponsor will not certify their maintenance.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_family"]
     },
     {
@@ -621,7 +621,7 @@
       "text": "A marriage or civil partnership certificate, or evidence of having lived together for at least 2 years.",
       "condition": {"question": "dependants_adults", "gte": 1},
       "why_it_applies": "A partner will apply as a dependant.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_family"]
     },
     {
@@ -630,7 +630,7 @@
       "text": "A birth certificate for each child, and evidence of the other parent's consent where only one parent is coming to the UK.",
       "condition": {"question": "dependants_children", "gte": 1},
       "why_it_applies": "At least one child will apply as a dependant.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_family"]
     }
   ],
@@ -648,7 +648,7 @@
       ],
       "payer": "EMPLOYER",
       "cannot_be_recouped_from_worker": true,
-      "verification": "third_party_reported",
+      "verification": "third_party",
       "source": "gov_sponsorship",
       "verified_at": "2026-10-08",
       "effective_from": "2026-04-08",
@@ -665,7 +665,7 @@
       "optional": true,
       "payer": "EMPLOYER",
       "cannot_be_recouped_from_worker": true,
-      "verification": "third_party_reported",
+      "verification": "third_party",
       "source": "gov_sponsorship",
       "verified_at": "2026-10-08"
     },
@@ -678,11 +678,11 @@
       "amount": "525.00",
       "payer": "EMPLOYER",
       "cannot_be_recouped_from_worker": true,
-      "verification": "third_party_reported",
+      "verification": "third_party",
       "source": "gov_sponsorship",
       "verified_at": "2026-10-08",
       "effective_from": "2025-04-09",
-      "notes": "£525 since 9 April 2025 (search-confirmed); reported unchanged for 2026. Cannot be passed to the worker since 31 December 2024."
+      "notes": "£525 since 9 April 2025, traced to the official page; reported unchanged for 2026, which is not yet confirmed there. Cannot be passed to the worker since 31 December 2024."
     },
     {
       "id": "immigration_skills_charge",
@@ -696,7 +696,7 @@
       ],
       "payer": "EMPLOYER",
       "cannot_be_recouped_from_worker": true,
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "source": "gov_sponsorship",
       "verified_at": "2026-10-08",
       "effective_from": "2025-12-16",
@@ -716,7 +716,7 @@
       ],
       "payer": "EITHER_BY_POLICY",
       "cannot_be_recouped_from_worker": false,
-      "verification": "third_party_reported",
+      "verification": "third_party",
       "source": "gov_sw_costs",
       "verified_at": "2026-10-08",
       "effective_from": "2026-04-08",
@@ -731,7 +731,7 @@
       "amount": "1035.00",
       "payer": "EITHER_BY_POLICY",
       "cannot_be_recouped_from_worker": false,
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "source": "gov_sw_costs",
       "verified_at": "2026-10-08",
       "notes": "The applicant pays in law; many employers pay it by policy."
@@ -751,7 +751,7 @@
       ],
       "payer": "EITHER_BY_POLICY",
       "cannot_be_recouped_from_worker": false,
-      "verification": "third_party_reported",
+      "verification": "third_party",
       "source": "gov_sw_family",
       "verified_at": "2026-10-08",
       "effective_from": "2026-04-08"
@@ -771,7 +771,7 @@
       ],
       "payer": "EITHER_BY_POLICY",
       "cannot_be_recouped_from_worker": false,
-      "verification": "third_party_reported",
+      "verification": "third_party",
       "source": "gov_sw_family",
       "verified_at": "2026-10-08",
       "effective_from": "2026-04-08"
@@ -786,7 +786,7 @@
       "condition": {"question": "dependants_adults", "gte": 1},
       "payer": "EITHER_BY_POLICY",
       "cannot_be_recouped_from_worker": false,
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "source": "gov_sw_family",
       "verified_at": "2026-10-08"
     },
@@ -800,7 +800,7 @@
       "condition": {"question": "dependants_children", "gte": 1},
       "payer": "EITHER_BY_POLICY",
       "cannot_be_recouped_from_worker": false,
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "source": "gov_sw_family",
       "verified_at": "2026-10-08"
     },
@@ -814,7 +814,7 @@
       "optional": true,
       "payer": "EITHER_BY_POLICY",
       "cannot_be_recouped_from_worker": false,
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "source": "gov_sw_apply_outside",
       "verified_at": "2026-10-08"
     },
@@ -828,7 +828,7 @@
       "optional": true,
       "payer": "EITHER_BY_POLICY",
       "cannot_be_recouped_from_worker": false,
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "source": "gov_sw_apply_outside",
       "verified_at": "2026-10-08"
     },
@@ -843,7 +843,7 @@
       "condition": {"question": "tb_listed_resident", "equals": true},
       "payer": "APPLICANT",
       "cannot_be_recouped_from_worker": false,
-      "verification": "third_party_reported",
+      "verification": "third_party",
       "source": "gov_tb_turkey",
       "verified_at": "2026-10-08",
       "notes": "Indicative range in lira; not converted and not included in the subtotals."
@@ -859,7 +859,7 @@
       "condition": {"question": "english_evidence", "equals": "selt"},
       "payer": "APPLICANT",
       "cannot_be_recouped_from_worker": false,
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "source": "gov_sw_english",
       "verified_at": "2026-10-08",
       "notes": "Typical range; not included in the subtotals."
@@ -873,44 +873,44 @@
     "days_held": 28,
     "condition": {"question": "sponsor_certifies_maintenance", "equals": false},
     "text": "Money the applicant must show has been held for 28 consecutive days before applying. It is not a fee and not a cost to the employer.",
-    "verification": "from_knowledge",
+    "verification": "unverified",
     "sources": ["gov_sw_eligibility", "gov_sw_family"]
   },
   "timeline_notes": [
     {
       "id": "decision_times",
       "text": "A decision usually takes up to 3 weeks from outside the UK and up to 8 weeks from inside the UK, counted from the biometrics appointment.",
-      "verification": "search_confirmed",
+      "verification": "official_source",
       "sources": ["gov_sw_overview"]
     },
     {
       "id": "apply_window",
       "text": "The applicant can apply up to 3 months before the job start date stated on the Certificate of Sponsorship.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_apply_outside"]
     },
     {
       "id": "cos_validity",
       "text": "A Certificate of Sponsorship must be used in an application within 3 months of being assigned.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sponsorship"]
     },
     {
       "id": "tb_certificate_validity",
       "text": "A TB certificate is valid for 6 months, so the test is best taken close to the application date.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_tb"]
     },
     {
       "id": "travel_window",
       "text": "The worker can normally travel to the UK up to 14 days before the start date on the certificate.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_overview"]
     },
     {
       "id": "maximum_grant",
       "text": "A single Skilled Worker grant lasts up to 5 years; a longer assignment needs an extension applied for from inside the UK.",
-      "verification": "from_knowledge",
+      "verification": "unverified",
       "sources": ["gov_sw_overview"]
     }
   ],
@@ -920,21 +920,21 @@
       "reference_pack": "\"2026/27 rates\"",
       "current_position": "Thresholds and rates frozen to 2030/31, identical to 2025/26",
       "effect_on_tool": "None numerically; the tax year is labelled explicitly",
-      "verification": "search_confirmed"
+      "verification": "official_source"
     },
     {
       "topic": "HS212 edition",
       "reference_pack": "Linked as \"2026\"",
       "current_position": "The 2026 edition is the one for 2025/26 returns (understanding, not verified)",
       "effect_on_tool": "None numerically",
-      "verification": "from_knowledge"
+      "verification": "unverified"
     },
     {
       "topic": "Employee NICs wording",
       "reference_pack": "\"8% up to £50,270\"",
       "current_position": "8% between £12,570 and £50,270, 2% above",
       "effect_on_tool": "Computation already correct; label clarified",
-      "verification": "from_knowledge"
+      "verification": "unverified"
     },
     {
       "topic": "Two-year total",
@@ -955,70 +955,70 @@
       "reference_pack": "Not stated",
       "current_position": "Raised to 9 times the minimum wage from 1 January 2026",
       "effect_on_tool": "In the TR_SGK rate set",
-      "verification": "search_confirmed"
+      "verification": "official_source"
     },
     {
       "topic": "Social security agreement",
       "reference_pack": "\"May stay in the Turkish scheme; flag it\"",
       "current_position": "Convention exists (1961 Order); conditions are employer, insurance and duration; period limit not verified",
       "effect_on_tool": "Toggle plus Turkish employer line plus certificate assumption",
-      "verification": "from_knowledge"
+      "verification": "unverified"
     },
     {
       "topic": "Visa decision time",
       "reference_pack": "3 weeks outside, 8 weeks inside",
       "current_position": "Same",
       "effect_on_tool": "None",
-      "verification": "search_confirmed"
+      "verification": "official_source"
     },
     {
       "topic": "English requirement",
       "reference_pack": "Not mentioned",
       "current_position": "B2 for new applications from 8 January 2026",
       "effect_on_tool": "Documents and timeline",
-      "verification": "search_confirmed"
+      "verification": "official_source"
     },
     {
       "topic": "Tuberculosis test",
       "reference_pack": "Not mentioned",
       "current_position": "Turkey is on the list; clinics in Istanbul and Ankara",
       "effect_on_tool": "Conditional document and timeline stage",
-      "verification": "search_confirmed"
+      "verification": "official_source"
     },
     {
       "topic": "Immigration Skills Charge",
       "reference_pack": "Not mentioned",
       "current_position": "£1,320 and £480 a year from 16 December 2025",
       "effect_on_tool": "Cost item with employer payer, cannot be recovered from the worker",
-      "verification": "search_confirmed"
+      "verification": "official_source"
     },
     {
       "topic": "Visa and sponsor fees",
       "reference_pack": "Not mentioned",
       "current_position": "Changed on 8 April 2026",
       "effect_on_tool": "Cost items with verified_at",
-      "verification": "third_party_reported"
+      "verification": "third_party"
     },
     {
       "topic": "Salary requirement",
       "reference_pack": "Not mentioned",
       "current_position": "£41,700 or the going rate, RQF 6, basic pay only",
       "effect_on_tool": "Guidance text; no eligibility inference",
-      "verification": "search_confirmed"
+      "verification": "official_source"
     },
     {
       "topic": "Accommodation value",
       "reference_pack": "Rent treated as the benefit",
       "current_position": "Statutory value is the greater of annual value and rent",
       "effect_on_tool": "Assumption BIK_CASH_EQUIVALENT_AS_INPUT",
-      "verification": "from_knowledge"
+      "verification": "unverified"
     },
     {
       "topic": "Payrolling of benefits",
       "reference_pack": "Not mentioned",
       "current_position": "Mandatory from April 2027, accommodation excluded",
       "effect_on_tool": "Assumption; no cost effect",
-      "verification": "from_knowledge"
+      "verification": "unverified"
     }
   ]
 }

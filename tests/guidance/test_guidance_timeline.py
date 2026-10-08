@@ -180,7 +180,7 @@ def _synthetic_chain_pack(raw_pack: dict[str, object]) -> GuidancePack:
 
     template = {
         "actor": "EMPLOYER",
-        "verification": "from_knowledge",
+        "verification": "unverified",
         "sources": ["gov_sw_your_job"],
     }
     raw_pack["stages"] = [

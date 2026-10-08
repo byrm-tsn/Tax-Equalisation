@@ -4,29 +4,29 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tax-equalisation"
-version = "0.1.0"
-description = "Tax-equalisation cost estimator: calculation engine, immigration guidance and Django web app."
+version = "0.2.0"
+description = "Estimates what a tax-equalised assignment from Turkey to England costs the employer, with the immigration steps, costs and timeline shown separately."
 readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "Proprietary" }
 dependencies = [
-    "pydantic>=2.7",
-    "PyYAML>=6",
+    "pydantic>=2.7,<3",
+    "PyYAML>=6,<7",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8",
-    "hypothesis>=6.100",
-    "ruff>=0.6",
-    "mypy>=1.11",
+    "pytest>=8,<10",
+    "hypothesis>=6.100,<7",
+    "ruff>=0.16,<0.17",
+    "mypy>=1.11,<3",
     "types-PyYAML",
     "pytest-django>=4.9",
     "django-stubs>=5.2",
 ]
 web = [
     "django>=5.2,<5.3",
-    "django-ninja>=1.3",
+    "django-ninja>=1.3,<2",
 ]
 
 [tool.setuptools.packages.find]

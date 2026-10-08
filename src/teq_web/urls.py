@@ -1,4 +1,4 @@
-"""URL map. The paths are the README's contract."""
+"""URL map: the pages, the operations endpoints and the API (each listed in the README)."""
 
 from __future__ import annotations
 

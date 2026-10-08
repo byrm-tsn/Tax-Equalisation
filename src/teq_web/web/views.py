@@ -1,4 +1,5 @@
-"""HTML views: the input form, the reference example, the results page and error pages.
+"""HTML views: the input form, the reference example, the result tabs, the compare view
+and the error pages.
 
 The form posts, the view validates and calculates, then redirects (303) to a GET results
 URL carrying the encoded inputs and rates date (post-redirect-get), so every result is

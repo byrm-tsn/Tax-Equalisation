@@ -217,6 +217,41 @@ def test_reference_pack_comparison_and_sources(panel: dict[str, object]) -> None
     assert panel["employer_responsibilities"]
 
 
+def test_verification_levels_are_labelled_and_explained(panel: dict[str, object]) -> None:
+    levels = panel["verification_levels"]
+    assert isinstance(levels, dict)
+    assert levels == {
+        "official_source": (
+            "Official source: Traced to the wording of the official page; check the linked "
+            "page before relying on a figure."
+        ),
+        "third_party": (
+            "Third-party report: Reported by third parties and not yet confirmed on the "
+            "official page; check it before relying on the figure."
+        ),
+        "unverified": (
+            "Not re-verified: Stated from general knowledge of the rules; confirm on the "
+            "official page before relying on it."
+        ),
+        "computed": "Computed: Arithmetic on figures used by this tool.",
+    }
+
+
+def test_each_item_carries_its_verification_label(panel: dict[str, object]) -> None:
+    costs = panel["costs"]
+    assert isinstance(costs, dict)
+    lines = {line["id"]: line for line in costs["lines"]}
+    skills_charge = lines["immigration_skills_charge"]
+    assert skills_charge["verification"] == "official_source"
+    assert skills_charge["verification_label"] == "Official source"
+    assert lines["visa_application_fee"]["verification"] == "third_party"
+    assert lines["visa_application_fee"]["verification_label"] == "Third-party report"
+    notes = panel["route_notes"]
+    assert isinstance(notes, list)
+    assert notes[0]["verification"] == "unverified"
+    assert notes[0]["verification_label"] == "Not re-verified"
+
+
 def test_eligibility_entries_carry_their_topic(panel: dict[str, object]) -> None:
     eligibility = panel["eligibility"]
     assert isinstance(eligibility, dict)

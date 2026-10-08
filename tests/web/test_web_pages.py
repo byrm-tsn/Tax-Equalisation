@@ -968,6 +968,17 @@ def test_costs_and_timeline_are_unchanged(immigration_html: str, section_of: Sec
     assert '<th scope="col">Typical time (an assumption)</th>' in timeline
 
 
+def test_the_immigration_tab_shows_how_each_item_was_verified(immigration_html: str) -> None:
+    text = _text(immigration_html)
+    assert "(Official source)" in text
+    assert "Third-party report, Skilled Worker visa: how much it costs (GOV.UK)" in text
+    assert "Not re-verified." in text
+    assert (
+        "Third-party report: Reported by third parties and not yet confirmed on the official "
+        "page; check it before relying on the figure."
+    ) in text
+
+
 def test_the_family_block_names_partner_and_children(
     client: Client, reference_token: str, immigration_html: str, section_of: Section
 ) -> None:

@@ -919,7 +919,7 @@ class ProvenanceEntry(_Frozen):
 
 
 class CalculationResult(_Frozen):
-    """The complete, reproducible result of one calculation (plan Appendix A).
+    """The complete, reproducible result of one calculation (docs/ARCHITECTURE.md, Appendix A).
 
     Identity fields:
 

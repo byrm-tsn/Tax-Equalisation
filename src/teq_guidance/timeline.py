@@ -5,9 +5,8 @@ answers take part. A stage that does not apply passes its own dependencies throu
 to the stages that depend on it, so a chain ``A -> B -> C`` with ``B`` not applying
 becomes ``A -> C`` and never loses the ordering. Inherited dependencies already implied
 by another dependency are dropped, so the shown graph stays minimal. The forward and
-backward passes run twice, once with every
-stage's minimum duration and once with its maximum, giving a range in days and
-weeks. The result is never a date.
+backward passes run twice, once with every stage's minimum duration and once with its
+maximum, giving a range in days and weeks. The result is never a date.
 """
 
 from __future__ import annotations

@@ -4,8 +4,8 @@ Every code the engine can emit has a kind (error, warning, info or assumption), 
 template, and a tailoring question for the user. Templates use ``str.format`` named
 fields; missing parameters are an engine bug and raise.
 
-The catalogue holds the codes of plan Appendix B, plus three assumption codes the
-result schema (Appendix A) uses (``UK_RESIDENT_FULL_YEAR``, ``UK_NIC_APPLIES``,
+The catalogue holds the codes of docs/ARCHITECTURE.md, Appendix B, plus three assumption
+codes the result schema (Appendix A) uses (``UK_RESIDENT_FULL_YEAR``, ``UK_NIC_APPLIES``,
 ``RATES_UNCHANGED_LATER_YEARS``), the error ``RATES_UNAVAILABLE`` raised when no rate
 set covers a date, the error ``FX_RATE_IN_FUTURE`` raised when the FX snapshot is dated
 after the rates date, and the warning ``EQUALISED_ITEM_NO_HYPO_SHARE`` emitted when a

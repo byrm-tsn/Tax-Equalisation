@@ -1,7 +1,10 @@
-"""Turn a calculation result into the rows the results page shows, in the pack's order.
+"""Turn a calculation result and its guidance panel into what the result tabs show.
+
+The Tax tab follows the reference pack's order; the Explain tab adds the trace and the
+Immigration tab the guidance panel.
 
 Presentation only: every figure comes straight from the result (lines, totals, the net
-guarantee, items and the trace); nothing is recomputed here.
+guarantee, items and the trace) or from the panel; nothing is recomputed here.
 """
 
 from __future__ import annotations

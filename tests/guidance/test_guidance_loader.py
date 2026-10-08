@@ -92,9 +92,9 @@ def test_every_cost_has_basis_payer_verification_and_date(pack: GuidancePack) ->
         assert isinstance(cost.basis, Basis)
         assert isinstance(cost.payer, Payer)
         assert cost.verification in {
-            Verification.SEARCH_CONFIRMED,
-            Verification.THIRD_PARTY_REPORTED,
-            Verification.FROM_KNOWLEDGE,
+            Verification.OFFICIAL_SOURCE,
+            Verification.THIRD_PARTY,
+            Verification.UNVERIFIED,
         }
         assert cost.verified_at == date(2026, 10, 8)
 
@@ -194,6 +194,21 @@ def test_rejects_unknown_verification_level(raw_pack: dict[str, Any]) -> None:
     _find(raw_pack["requirements"], "salary_threshold")["verification"] = "heard_it_somewhere"
     problems = _problems(raw_pack)
     assert any("'heard_it_somewhere' is not one of" in p for p in problems)
+
+
+def test_verification_levels_are_the_three_item_levels_and_computed() -> None:
+    assert [level.value for level in Verification] == [
+        "official_source",
+        "third_party",
+        "unverified",
+        "computed",
+    ]
+
+
+def test_computed_is_refused_on_pack_items(raw_pack: dict[str, Any]) -> None:
+    _find(raw_pack["requirements"], "salary_threshold")["verification"] = "computed"
+    problems = _problems(raw_pack)
+    assert any("only allowed in the comparison table" in p for p in problems)
 
 
 def test_reports_every_problem_at_once(raw_pack: dict[str, Any]) -> None:

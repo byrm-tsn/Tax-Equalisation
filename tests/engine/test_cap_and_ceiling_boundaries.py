@@ -1,6 +1,9 @@
-"""Boundary tests through ``calculate`` (plan section 12): the relocation cap and the
-Turkish social security ceiling, each at the value and one penny (kuruş) either side,
-read from the rate sets; and the per-move cap across years 1 and 2."""
+"""Boundary tests through ``calculate`` (docs/ARCHITECTURE.md, section 12).
+
+The relocation cap and the Turkish social security ceiling, each at the value and one
+penny (kuruş) either side, read from the rate sets; and the per-move cap across years 1
+and 2.
+"""
 
 from __future__ import annotations
 
